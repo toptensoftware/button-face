@@ -139,7 +139,7 @@ Inputs: device `width`, `height` (px), options. Output: raw `Buffer`, RGB
    channels 3. Return `raw().toBuffer()`.
 
 ### Built-in icons
-- 45 SVGs in `node-buttonImage/images/` (~64 KB total): add, apple-tv, apps,
+- 42 SVGs (originally noted as 45 - a miscount) in `node-buttonImage/images/` (~64 KB total): add, apple-tv, apps,
   arrow-down, arrow-left, arrow-right, arrow-up, cancel-circle, cancel, check,
   circle, cross, delete, diamond, forward, function, guide, hdd, heart, home,
   info, list, next-track, ok, option, pause, play-pause, play, playstation,
@@ -153,7 +153,8 @@ Inputs: device `width`, `height` (px), options. Output: raw `Buffer`, RGB
     via `style="fill:#848484"` / `stroke:#848484` in style attributes, plus
     inkscape/sodipodi namespaces and `<sodipodi:namedview>` cruft (contains
     `#ffffff`, `#000000`, `#d1d1d1`, `#0099e5` - editor metadata, not rendered).
-- **All 45 contain `#848484`** as the recolour key (fill attrs, style fill, style stroke).
+- **All 42 contain `#848484`** as the recolour key (fill attrs, style fill;
+  style stroke only before the step 3 stroke-to-path conversion).
 - Fixed-colour exceptions (must NOT be recoloured by a "tint everything" approach):
   `hdd.svg` (red `#ff0000` circle + `<text>` "HDD" in **Impact** font - font
   availability differs per platform/browser), `apple-tv.svg` (3 radialGradients,
@@ -283,7 +284,7 @@ renderer or wrapped lines overflow/misalign.
   future option for browser tests.
 - Confidence tests: pure units (wrapLines, colour parsing/normalisation,
   colour-map replacement, scaleFont/virtual scaling, SVG size parsing, icon
-  registry has 45 entries) + render smoke tests asserting pixels (fill layer ->
+  registry has 42 entries) + render smoke tests asserting pixels (fill layer ->
   all pixels colour X; recoloured built-in `#square`/`#circle` -> known pixel
   colour; text layer -> some non-background pixels; RGB vs RGBA buffer length;
   virtual-size scaling of translate). Avoid exact snapshot images (font
@@ -324,6 +325,136 @@ renderer or wrapped lines overflow/misalign.
   `exports` map is deliberately not added yet (step 13).
 - Tests read package.json/LICENSE via `new URL("../", import.meta.url)` -
   reuse that pattern for fixture loading in later tests.
+
+### Implement step 3 (Skia icon spike) - learnings - BLOCKED, see 1-3-1 below
+- Copied the old icons to `icons/` unchanged. **There are 42, not 45** (the
+  name list in *Built-in icons* above has 42 entries too; "45" was a miscount).
+  Later steps (7: "45 entries") should use 42 / the `icons/` directory count.
+- Fixture `test/fixtures/material-home.svg` = Material Symbols Outlined
+  `home` default 24px, downloaded as-is (one line, `viewBox="0 -960 960 960"`,
+  no fill). The home path spans x 160..800, y **-840**..-120 in viewBox units.
+- `test/helpers.js` created now (planned for step 8): `drawSvg(svg, w, h, bg?)`
+  (spike helper that uses @napi-rs/canvas directly - replace with the backend in
+  step 8), `pixelAt`, `pixels`, `findInkBounds`, `expectColorNear`. Note
+  `node --test` default globs include `test/**/*.js`, so `helpers.js` is loaded
+  as a (0-test) test file - harmless.
+- `test/spike-icons.test.js`: all 42 icons decode + have ink; square/circle
+  stroke colour ~#848484; `currentColor` + root `color`; root
+  `fill="currentColor"` inherited by unpainted paths (inline + Material
+  fixture -> all ink red); unfilled Material icon renders black; negative
+  viewBox and padded `-144 -1104 1248 1248` viewBox ink bounds within 2px of
+  the expected maths; steam gradient non-uniform; hdd keeps red.
+- Skia **passes**: `currentColor`, inherited root `fill`, negative/padded
+  viewBoxes, `xlink:href` gradient + `gradientUnits="userSpaceOnUse"` (steam),
+  `<text>` with Impact (hdd; Impact is installed on Windows - other platforms
+  will fall back), style `fill`/`stroke` colours. SVGs are rendered as vectors
+  at the draw size (no blur when scaling a 24px SVG to 144px) -
+  `loadImage(buffer)` + `drawImage(img, x, y, w, h)` is enough; no need to
+  rewrite width/height or set `img.width` first.
+- `#square`/`#circle` are **stroked outlines** (`fill:none`), so their centre
+  pixel is transparent; the test samples the stroke instead.
+- `apple-tv`'s three `fill="url(#SVGID_n_)"` attributes are overridden by
+  `style="fill:#848484"` on the same elements, so the gradients are never used
+  and the icon is uniform #848484 - in librsvg too. Test asserts that.
+- Compared against librsvg using the old project's sharp (read-only, via
+  `createRequire`): `scratch/sharp-compare.js` (per-icon diff),
+  `scratch/sharp-side-by-side.js`, `scratch/svg-size-modes.js`,
+  `scratch/stroke-experiments.js` (all gitignored). 33 icons match closely
+  (mean diff < 1/255); the outliers are all explained by the problem below.
+- **Problem found:** Skia (@napi-rs/canvas 1.1.1) **ignores a unitless
+  `stroke-width` inside `style="..."`** (e.g. `style="stroke-width:0.698765"`)
+  and falls back to 1 user unit. Works as an attribute (`stroke-width="4"`) or
+  with a unit (`stroke-width:4px`). librsvg and browsers accept unitless.
+  Impact: `guide` TV frame + antennae nearly invisible (1 unit in a 1248-unit
+  viewBox); `check`, `circle`, `cross`, `diamond`, `home`, `square`,
+  `triangle`, `star` strokes are visibly too thick (1 unit vs ~0.5-0.7 in a
+  19.05 viewBox). Recorded as a `todo` test in `spike-icons.test.js`
+  ("unitless stroke-width in style attribute is honoured").
+- Contact sheet: `scratch/spike-icons.png` (`node scratch/spike-icons.js`),
+  white and black backgrounds.
+
+### 1-3-1: Skia ignores unitless `stroke-width` in `style` (RESOLVED - see Decisions after step 3)
+**Problem:** 9 of 42 built-in icons render wrong in Skia because their
+Inkscape `style="...stroke-width:N..."` values have no unit; `guide` is nearly
+invisible, 8 stroked icons are too bold. Any third-party SVG written the same
+way will also render wrong in Node (browsers are fine).
+
+**Options:**
+1. **Fix the built-ins at pack time only** - the step 7 generator also appends
+   `px` to unitless `stroke-width` in style declarations. Smallest change;
+   built-ins correct everywhere; third-party SVGs still wrong in Node.
+2. **Normalise at render time (pure string fn, shared tokeniser)** - add e.g.
+   `normalizeStyleLengths(svg)` to `recolor.js`, reusing the step 5 style/
+   `<style>` declaration tokeniser, appending `px` to unitless length
+   properties (`stroke-width`, `stroke-dashoffset`, `font-size`, ...); call it
+   from the Node (napi) backend's `loadSvgImage` (harmless in browsers, could
+   also run in core). Fixes built-ins and third-party SVGs; small, unit-testable.
+3. **Fall back to sharp (librsvg) for SVG rasterisation in the Node backend** -
+   best SVG fidelity and matches old output exactly, but re-adds a large
+   native dependency the user chose to drop, and Node output then differs from
+   the browser path.
+
+**Recommendation:** Option 2 (also fixes the built-ins, keeps Skia, no new
+deps). Would add to Plan step 5 (tokeniser + `normalizeStyleLengths` tests)
+and step 8 (backend calls it; the `todo` test becomes a real test).
+
+### Decisions (user, resolving the step 3 1-3-1)
+- **Do option 2 anyway, as a fallback** for third-party SVGs:
+  `normalizeStyleLengths(svg)` - pure string fn in `src/recolor.js` reusing
+  the step 5 style tokeniser - called by the Node backend's `loadSvgImage`
+  (folded into Plan steps 5 and 8).
+- **Built-in icons must be filled paths only, no strokes.** The 9 stroked
+  icons (check, circle, cross, diamond, guide, home, square, star, triangle)
+  were converted with Inkscape (stroke to path) via the re-runnable
+  `scripts/strokes-to-paths.js`. A test enforces "no stroke paint" on every
+  icon (`test/icons.test.js`).
+- Add a minimal `README.md` with an "SVG authoring notes" section advising
+  against strokes (done in step 3).
+
+### Implement step 3 (resolution) - learnings
+- **Rule: built-in icons (`icons/*.svg`) must be filled paths only - no
+  `stroke` paint** (attribute or style value other than `none`). Enforced by
+  `test/icons.test.js` ("paints no strokes"). To fix an offending icon run
+  `node scripts/strokes-to-paths.js icons/<name>.svg`.
+- `scripts/strokes-to-paths.js`: runs Inkscape 1.4.4 (`inkscape.com` on
+  Windows; override with env `INKSCAPE`) with
+  `--actions=select-all:no-groups;object-stroke-to-path;export-type:svg;export-overwrite;export-do`
+  on each file, in place. `no-groups` selects every leaf object including
+  ones nested in groups. ~2-3 s per file.
+- Inkscape output: the converted `<path>` has **no fill of its own** - it
+  inherits `#848484` from its ancestor (`<g style="fill:#848484">` in the
+  19.05-viewBox icons, root `fill="#848484"` in `guide`). So `#848484`
+  survives exactly once per converted icon and recolouring the ancestor
+  recolours the outline. width/height/viewBox unchanged; Inkscape also
+  rewrites `sodipodi:docname` and drops the trailing newline (harmless).
+  Unrelated leftover `stroke-width:...` declarations with `stroke:none`
+  remain (harmless - nothing is stroked).
+- `scripts/build-icon-reference.js` (borrows sharp + `images/` from
+  `../node-buttonImage`, read-only; sharp is not a dependency) writes
+  `test/fixtures/icon-reference.json`: per-icon librsvg render stats of the
+  **original** icons at 72x72 (`inkStats` = coverage, ink bounds,
+  coverage-weighted mean RGB; helper in `test/helpers.js`, shared by the
+  script and tests). `test/icons.test.js` checks every icon's Skia render
+  against it (coverage within max(10, 5%), bounds +/-1px, colour +/-4).
+  Before the conversion exactly the 9 stroked icons failed it (e.g. guide
+  coverage 188.6 vs 452.2; square 382.7 vs 270.9); after, all 42 pass.
+  Also: every single-colour icon (39; not hdd/steam/playstation) recolours
+  to red by swapping `#848484` (interim literal replace; step 5's
+  `applyColorMap` can replace it).
+- The old `todo` test became a characterisation test of the Skia quirk
+  ("unitless stroke-width in style is ignored, px is honoured"). If it ever
+  fails, Skia fixed the bug and `normalizeStyleLengths` could be dropped.
+  Step 8's backend test asserts the patched behaviour.
+- `#square`/`#circle` "outline is #848484" now samples the most opaque pixel
+  on the middle row (outline is ~2.6px, matching librsvg; it used to be
+  ~3.8px in Skia because of the bug).
+- Visual check: `node scratch/sharp-compare.js` - all 42 icons now mean diff
+  < 0.7/255 vs librsvg. `scratch/side-by-side.png` (96px; columns: Skia new,
+  librsvg new, librsvg original) for the 9 converted icons - indistinguishable.
+  `scratch/spike-icons.png` contact sheet regenerated - all icons look right.
+  `scratch/icons-original/` holds a backup of the unconverted icons
+  (gitignored; the originals are also in `../node-buttonImage/images/`).
+- `npm test`: 189 tests, 189 pass, 0 todo.
 
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
@@ -458,6 +589,30 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
 - Initial GitHub push happens right after scaffold (step 2), so later steps
   build on a tracked repo; later commits/pushes only when the user asks.
 
+### Implement step 3 - for user review
+- Icon count is 42 (not 45); tests assert 42.
+- `#square`/`#circle` "centre pixel ~#848484" changed to "stroke pixel
+  ~#848484" (they are outlines).
+- `apple-tv` "radial gradients produce non-uniform colour" changed to
+  "uniform #848484" (its gradients are overridden by style fills; librsvg agrees).
+- `test/helpers.js` created in step 3 rather than step 8 (DRY with the spike
+  scripts); `drawSvg` in it is temporary until the backend exists.
+- The Material fixture was copied verbatim from a download (Apache-2.0); no
+  licence header added to the fixture file.
+- A minimal `README.md` (project name + "SVG authoring notes") was created
+  at the user's request, ahead of the separate docs job (the Description
+  says no README yet). It says the library patches unitless stroke-width -
+  true once step 8 lands.
+- The no-stroke and librsvg-reference icon tests live in a new
+  `test/icons.test.js`, which step 7 extends (rather than a separate file).
+- The stroke-to-path icons keep Inkscape's cruft and its rewritten
+  `sodipodi:docname`; the conversion was not hand-tidied.
+- `scripts/build-icon-reference.js` is checked in (not scratch) so the
+  fixture's provenance is reproducible, even though it needs the sibling old
+  project (sharp + images) to run. It is not run by tests.
+- The old `todo` test was kept as a characterisation test of the Skia quirk
+  (asserts the bug exists), not deleted.
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -484,7 +639,7 @@ ask the user to review.
   *Done:* remote `https://github.com/toptensoftware/button-face` (origin,
   branch `main`). Added `.gitattributes` (`* text=auto eol=lf`) because the
   machine's global git config converts LF→CRLF.
-- [ ] 3. **[visual] Skia icon spike.** Copy the 45 SVGs from
+- [x] 3. **[visual] Skia icon spike.** Copy the 45 SVGs from
   `node-buttonImage/images/` to `icons/` (unchanged). Test first:
   `test/spike-icons.test.js` - for each icon, load via `@napi-rs/canvas`
   `Image` (or `loadImage`) from the SVG string, draw at 72x72 onto a
@@ -504,6 +659,11 @@ ask the user to review.
   the user (1-3-1) before falling back to sharp for SVG rasterisation in the
   Node backend.** Keep the useful tests (they become icon render tests later;
   rename/merge in step 10/12).
+  *Status:* done. The 1-3-1 (Skia ignores unitless `stroke-width` in
+  `style`) was resolved by the user: the 9 stroked icons were converted to
+  filled paths (`scripts/strokes-to-paths.js`), `test/icons.test.js` enforces
+  no strokes + librsvg-reference likeness for all 42, README authoring note
+  added; the render-time fallback is folded into steps 5 and 8.
 - [ ] 4. **Colour utility (`src/color.js`).** Tests first
   (`test/color.test.js`): `parseColor` -> `{r,g,b,a}` (a 0..1) or `null` for
   `#rgb/#rgba/#rrggbb/#rrggbbaa` (any case), `rgb()/rgba()` comma + space
@@ -527,8 +687,22 @@ ask the user to review.
   `substituteText(svg,
   text)` replaces every `$(x)` (port old semantics exactly - check
   `drawButton.js`). Include tests against real icon files (an Inkscape one with
-  `style` fill/stroke, a Material one with `fill` attr, `steam.svg` whose
-  gradient ref must survive).
+  `style` fill, a Material one with `fill` attr, `steam.svg` whose
+  gradient ref must survive; note the built-ins no longer have stroke paint -
+  use an inline SVG for `style` stroke cases).
+  **`normalizeStyleLengths(svg)`** (Skia fallback, see step 3 Decisions):
+  reuses the same style/`<style>` declaration tokeniser (DRY - no second
+  parser) to append `px` to unitless numeric values of length properties
+  (at least `stroke-width`, `stroke-dashoffset`, `font-size`; also
+  `stroke-dasharray` lists, `stroke-miterlimit` excluded - it is a ratio).
+  Tests first: `style="stroke-width:0.7"` -> `0.7px`; `.5` and `1e-1`
+  handled; values with units (`2px`, `1em`, `50%`) and
+  keywords (`inherit`, `none`) untouched; `stroke-dasharray:2,1` ->
+  `2px,1px`; presentation attributes (`stroke-width="4"`, already fine in
+  Skia) untouched; `<style>` text handled; non-length properties
+  (`opacity:0.5`, `stroke-miterlimit:4`, `fill-opacity`) untouched; rest of
+  the SVG byte-for-byte identical. Optionally replace the literal
+  `strokeValues` regex in `test/icons.test.js` with the tokeniser if exported.
 - [ ] 6. **Shared maths (`src/scale.js`, `src/svgSize.js`).** Tests first.
   `createScaler(virtualSize, width, height)` -> `{ sx, sy, x(v), y(v),
   translate({x,y}), padding(p) }` where `padding` normalises number |
@@ -543,7 +717,7 @@ ask the user to review.
   `svgSize.js` (generic viewBox maths). Tests: `test/scale.test.js`,
   `test/svgSize.test.js`.
 - [ ] 7. **Built-in icons module.** Tests first (`test/icons.test.js`):
-  `src/icons.js` exports a frozen name->SVG map with 45 entries matching
+  `src/icons.js` exports a frozen name->SVG map with 42 entries matching
   `icons/*.svg` names; no entry contains `#848484` in a paint context; every
   entry contains `currentColor`; `hdd` still has `#ff0000`, `steam`/`apple-tv`
   gradients unchanged; **up-to-date check**: `generateIconsModule()` imported
@@ -559,8 +733,15 @@ ask the user to review.
   `@napi-rs/canvas` (only file importing it). Tests first
   (`test/backend.test.js`): canvas size, `getImageData` RGBA; loading a 10x10
   red-rect SVG and drawing at 20x20 fills the canvas red (pixel samples);
-  invalid SVG rejects. Also add `test/helpers.js` (`pixelAt`,
-  `findInkBounds`, `expectColorNear`) for reuse by all render tests.
+  invalid SVG rejects; **`loadSvgImage` applies `normalizeStyleLengths`**
+  (step 5) before decoding - test: a box with `style="fill:none;stroke:red;
+  stroke-width:8"` drawn via the backend has an 8-wide stroke (same check as
+  the px case of the Skia-quirk characterisation test in
+  `test/spike-icons.test.js`). `test/helpers.js` already exists (step 3):
+  switch its `drawSvg` to the backend (so it is no longer importing
+  @napi-rs/canvas directly) - note the quirk test must still draw via raw
+  Skia, so keep a raw path for it or move it into `test/backend.test.js`.
+  Re-run `test/icons.test.js` (librsvg-reference check) through the backend.
 - [ ] 9. **SVG resolver (`src/resolve.js`).** Tests first
   (`test/resolve.test.js`): `createSvgResolver({ prefixes })` returns async
   `resolve(src)`; built-in `#name` -> `icons[name]`, unknown name throws;
@@ -627,14 +808,15 @@ ask the user to review.
   `package.json` (`.` -> `src/index.js`, `./node` -> `src/node.js`).
 - [ ] 14. **[visual] Sample renders for human review.** Add
   `scripts/render-samples.js` (`npm run samples`) writing PNGs to `scratch/`:
-  all 45 icons default + recoloured, the Notes example definition at 72/96/144
+  all 42 icons default + recoloured, the Notes example definition at 72/96/144
   px, text alignment/valign/wrap grid, tint example. Not automatically
   verifiable - ask the user to review against the old project's output. A
   test only checks the script runs and produces files (into a temp dir).
 - [ ] 15. **Final review.** Re-read the Description and tick off every item
   (setup, version, copyright, licence, gitignore, engines, backend
   abstraction, layers, recolouring, `$(x)`, virtual pixels, text semantics,
-  icons + generator + staleness test, `render` API, tests, no README). Grep
+  icons + generator + staleness test, `render` API, tests, README limited
+  to the user-requested SVG authoring note). Grep
   for leftover sharp/node-canvas references, dead code, duplicated maths.
   `npm test` 0 failures. Record any CLAUDE.md update proposals (Rule 4, e.g.
   layout/`npm run build:icons` note) for the user. **[user]** Ask whether to
