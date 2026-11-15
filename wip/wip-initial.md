@@ -576,6 +576,46 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   `getRootAttribute` tests added to `test/recolor.test.js` (4).
   `npm test`: 366 tests, 366 pass.
 
+### Implement step 7 (icons module) - learnings
+- `scripts/build-icons.js` exports `generateIconsModule()` (string) and
+  writes `src/icons.js` only when run as main (`npm run build:icons`, added
+  to package.json; main check = `import.meta.url == pathToFileURL(argv[1])`,
+  not `import.meta.main`, which needs Node >= 24.2). `src/icons.js` (70,704
+  bytes, LF, no imports) = header comment + `export const icons =
+  Object.freeze({ "<name>": "<svg>", ... })`, keys sorted, values via
+  `JSON.stringify`. Named export only (no default).
+- **Gotcha - element-level `color` beats the root `color`.** 13 icons
+  (arrow-*, check, circle, cross, diamond, home, ok, square, star, triangle)
+  have Inkscape `style="color:#000000;...fill:#848484"` on their paths. With
+  `fill:currentColor` that element's own `color` wins over the root's, so the
+  icon rendered black. Inert in the sources (none use `currentColor`), so the
+  generator also rewrites **every `color` paint value to `inherit`** (Skia
+  honours it) and throws if a source already uses `currentColor` (then
+  `color` values would matter). Same caveat applies to third-party SVGs
+  coloured via the svg layer's `color`: an element-level `color` blocks it
+  (Material icons don't have one).
+- `src/recolor.js` gained exported **`mapPaintValues(svg, fn)`** - the
+  paint-only visitor over the shared tokeniser (`fn({name, value,
+  declaration})` returns a replacement or undefined). `findPaintValues` and
+  `applyColorMap` are now built on it (DRY). 2 tests in `recolor.test.js`.
+- 5 icons (arrow-down/left/right/up, play-pause) are **CRLF in this working
+  tree** although git stores LF (`git ls-files --eol`: `i/lf w/crlf`; a
+  checkout from before `.gitattributes`). Harmless: the generator normalises
+  CRLF -> LF, and `test/icons.test.js`'s `readIcon` does too. A fresh clone /
+  `git checkout -- icons/` would fix the working tree (not done).
+- `test/icons.test.js` now: sources (no strokes, reference coverage);
+  module (up to date vs `generateIconsModule()`, GENERATED header/no
+  imports/no CR, 42 sorted frozen keys == `icons/*.svg`); per icon: no
+  `#848484` paint + has `currentColor`, and paint values equal the source's
+  with `#848484`->`currentColor` / `color`->`inherit`, rest byte-identical
+  (paints blanked with `mapPaintValues` on both sides); fixed colours (hdd
+  `#ff0000`, steam/apple-tv stop colours + steam `url(#A)`, playstation's 4
+  logo colours); ok.svg `color` neutralised. The librsvg-reference and
+  recolour render tests now run on **`src/icons.js` entries with root
+  `color`** (`setRootColor(icon, "#848484")` / `"#ff0000"`) instead of the
+  raw sources, proving the generated module renders like the originals.
+- `npm test`: 457 tests, 457 pass (366 + 2 recolor + 89 icons).
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -778,6 +818,17 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
   `.5px`) and won't match a px suffix glued to a word; otherwise identical.
 - No rounding in the scaler; consumers round final positions as before.
 
+### Implement step 7 - for user review
+- Generator also rewrites all `color` paint values in built-ins to `inherit`
+  (beyond the plan's `#848484` -> `currentColor`) - needed for the root
+  `color` to work on 13 Inkscape icons; see step 7 Notes.
+- New public-ish helper `mapPaintValues` exported from `src/recolor.js`
+  (needed by the generator; also refactors two existing functions).
+- `src/icons.js` exports only the named `icons` (no default export).
+- `npm run build:icons` script added; Rule 4: CLAUDE.md could mention
+  "edit `icons/*.svg`, then `npm run build:icons`" (proposal for step 15).
+- The 5 CRLF working-tree icons were left as-is (git index is LF).
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -881,7 +932,7 @@ ask the user to review.
   done in the material job): pure `padViewBox(svg, fraction)` in
   `svgSize.js` (generic viewBox maths). Tests: `test/scale.test.js`,
   `test/svgSize.test.js`.
-- [ ] 7. **Built-in icons module.** Tests first (`test/icons.test.js`):
+- [x] 7. **Built-in icons module.** Tests first (`test/icons.test.js`):
   `src/icons.js` exports a frozen name->SVG map with 42 entries matching
   `icons/*.svg` names; no entry contains `#848484` in a paint context; every
   entry contains `currentColor`; `hdd` still has `#ff0000`, `steam`/`apple-tv`

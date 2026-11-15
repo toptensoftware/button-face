@@ -109,12 +109,22 @@ function rewriteTrimmed(raw, fn)
 export function findPaintValues(svg)
 {
     let found = [];
-    rewriteValues(svg, ({ name, value }) =>
-    {
-        if (PAINT_PROPERTIES.has(name))
-            found.push({ name, value });
-    });
+    mapPaintValues(svg, ({ name, value }) => { found.push({ name, value }); });
     return found;
+}
+
+/**
+ * Rewrite paint values (see `findPaintValues`) with a callback. `fn` is called
+ * for each one in document order; returning a string replaces the value
+ * (surrounding whitespace and `!important` are kept), returning undefined
+ * leaves it byte-for-byte unchanged.
+ * @param {string} svg
+ * @param {(v: SvgValue) => string|undefined} fn
+ * @returns {string}
+ */
+export function mapPaintValues(svg, fn)
+{
+    return rewriteValues(svg, v => PAINT_PROPERTIES.has(v.name) ? fn(v) : undefined);
 }
 
 /**
@@ -141,10 +151,8 @@ export function applyColorMap(svg, map)
     });
     if (entries.length == 0)
         return svg;
-    return rewriteValues(svg, ({ name, value }) =>
+    return mapPaintValues(svg, ({ value }) =>
     {
-        if (!PAINT_PROPERTIES.has(name))
-            return undefined;
         let color = parseColor(value);
         return color ? entries.find(([from]) => colorsEqual(from, color))?.[1] : undefined;
     });

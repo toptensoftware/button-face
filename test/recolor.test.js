@@ -5,7 +5,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import {
-    applyColorMap, findPaintValues, normalizeStyleLengths,
+    applyColorMap, findPaintValues, mapPaintValues, normalizeStyleLengths,
     setRootAttribute, setRootColor, substituteText, getRootAttribute,
 } from "../src/recolor.js";
 
@@ -46,6 +46,32 @@ describe("findPaintValues", () =>
     {
         let svg = `<svg><svg:style type="text/css"><![CDATA[ @media screen { path { fill: red } } ]]></svg:style></svg>`;
         assert.deepEqual(findPaintValues(svg), [{ name: "fill", value: "red" }]);
+    });
+});
+
+describe("mapPaintValues", () =>
+{
+    const svg = `<svg color="red" width="10"><style>.a { fill : blue ; opacity:.5 }</style>`
+        + `<path style="color:#000; fill:#848484 !important;stroke-width:2" stroke="none" id="fill"/></svg>`;
+
+    test("visits every paint value (not other values) in document order", () =>
+    {
+        let seen = [];
+        assert.equal(mapPaintValues(svg, v => { seen.push(v); }), svg);
+        assert.deepEqual(seen, [
+            { name: "color", value: "red", declaration: false },
+            { name: "fill", value: "blue", declaration: true },
+            { name: "color", value: "#000", declaration: true },
+            { name: "fill", value: "#848484", declaration: true },
+            { name: "stroke", value: "none", declaration: false },
+        ]);
+    });
+
+    test("replaces values the callback returns, keeping whitespace and !important", () =>
+    {
+        let out = mapPaintValues(svg, ({ name, declaration }) => name == "color" && declaration ? "inherit" : name == "fill" ? "lime" : undefined);
+        assert.equal(out, `<svg color="red" width="10"><style>.a { fill : lime ; opacity:.5 }</style>`
+            + `<path style="color:inherit; fill:lime !important;stroke-width:2" stroke="none" id="fill"/></svg>`);
     });
 });
 
