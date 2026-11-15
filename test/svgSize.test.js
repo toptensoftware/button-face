@@ -3,8 +3,9 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { getSvgSize, parseLength, parseViewBox, padViewBox } from "../src/svgSize.js";
-import { getRootAttribute } from "../src/recolor.js";
+import { getSvgSize, parseLength, parseViewBox, padViewBox, getViewBox, prepareSvgImage } from "../src/svgSize.js";
+import { getRootAttribute, normalizeStyleLengths } from "../src/recolor.js";
+import { icons } from "../src/icons.js";
 import { listIcons, readIcon, readFixture } from "./helpers.js";
 
 const iconNames = listIcons();
@@ -172,5 +173,106 @@ describe("padViewBox", () =>
     test("fraction <= -0.5 (nothing left) throws", () =>
     {
         assert.throws(() => padViewBox(materialHome, -0.5), RangeError);
+    });
+});
+
+describe("getViewBox", () =>
+{
+    test("returns the parsed root viewBox when valid", () =>
+    {
+        assert.deepEqual(getViewBox(svg(`width="24" height="24" viewBox="0 -960 960 960"`)), { x: 0, y: -960, width: 960, height: 960 });
+    });
+
+    test("without a viewBox falls back to the natural size at the origin", () =>
+    {
+        assert.deepEqual(getViewBox(svg(`width="20" height="10"`)), { x: 0, y: 0, width: 20, height: 10 });
+    });
+
+    test("no viewBox and no size -> 300x150", () =>
+    {
+        assert.deepEqual(getViewBox(svg(``)), { x: 0, y: 0, width: 300, height: 150 });
+    });
+
+    test("an invalid viewBox is treated as missing", () =>
+    {
+        assert.deepEqual(getViewBox(svg(`width="40" height="30" viewBox="0 0 0 10"`)), { x: 0, y: 0, width: 40, height: 30 });
+        assert.deepEqual(getViewBox(svg(`width="40" height="30" viewBox="a b c d"`)), { x: 0, y: 0, width: 40, height: 30 });
+    });
+
+    test("throws when the root element isn't <svg>", () =>
+    {
+        assert.throws(() => getViewBox(`<html width="10" height="10"/>`), /svg/);
+    });
+});
+
+describe("prepareSvgImage", () =>
+{
+    test("stamps width/height, replacing px and % values", () =>
+    {
+        let out = prepareSvgImage(svg(`width="24px" height="100%" viewBox="0 0 24 24"`), 48, 36);
+        assert.equal(getRootAttribute(out, "width"), "48");
+        assert.equal(getRootAttribute(out, "height"), "36");
+        assert.equal(getRootAttribute(out, "viewBox"), "0 0 24 24");
+    });
+
+    test("adds a viewBox from the original natural size when missing (before stamping)", () =>
+    {
+        let out = prepareSvgImage(svg(`width="10" height="5"`), 40, 20);
+        assert.equal(getRootAttribute(out, "viewBox"), "0 0 10 5");
+        assert.deepEqual(getSvgSize(out), { width: 40, height: 20 });
+    });
+
+    test("no size and no viewBox -> viewBox from the 300x150 default", () =>
+    {
+        assert.equal(getRootAttribute(prepareSvgImage(svg(``), 60, 30), "viewBox"), "0 0 300 150");
+    });
+
+    test("an invalid viewBox is replaced by one from the natural size", () =>
+    {
+        let out = prepareSvgImage(svg(`width="8" height="4" viewBox="0 0 0 0"`), 16, 8);
+        assert.equal(getRootAttribute(out, "viewBox"), "0 0 8 4");
+    });
+
+    test("a valid viewBox is kept unchanged", () =>
+    {
+        let out = prepareSvgImage(svg(`viewBox="-144 -1104 1248 1248"`), 72, 72);
+        assert.equal(getRootAttribute(out, "viewBox"), "-144 -1104 1248 1248");
+    });
+
+    test("adds xmlns only when missing", () =>
+    {
+        let bare = `<svg width="10" height="10"><rect width="10" height="10"/></svg>`;
+        assert.equal(getRootAttribute(prepareSvgImage(bare, 20, 20), "xmlns"), "http://www.w3.org/2000/svg");
+        let out = prepareSvgImage(svg(`width="10" height="10"`), 20, 20);
+        assert.equal(out.split("xmlns=").length - 1, 1);
+    });
+
+    test("applies normalizeStyleLengths", () =>
+    {
+        let s = `<svg ${NS} width="10" height="10" viewBox="0 0 10 10"><path style="stroke-width:0.7" d="M0 0L10 10"/></svg>`;
+        let out = prepareSvgImage(s, 10, 10);
+        assert.match(out, /stroke-width:0\.7px/);
+        assert.equal(out, normalizeStyleLengths(out));
+    });
+
+    test("nested <svg> elements are untouched", () =>
+    {
+        let s = `<svg ${NS} width="10" height="10"><svg width="5" height="5"><rect width="5" height="5"/></svg></svg>`;
+        let out = prepareSvgImage(s, 30, 30);
+        assert.match(out, /<svg width="5" height="5"><rect/);
+        assert.equal(getRootAttribute(out, "width"), "30");
+    });
+
+    test("built-in icon markup keeps its viewBox", () =>
+    {
+        let out = prepareSvgImage(icons.heart, 96, 96);
+        assert.equal(getRootAttribute(out, "viewBox"), getRootAttribute(icons.heart, "viewBox"));
+        assert.deepEqual(getSvgSize(out), { width: 96, height: 96 });
+    });
+
+    test("throws when the root element isn't <svg>", () =>
+    {
+        assert.throws(() => prepareSvgImage(`<html/>`, 10, 10), /svg/);
+        assert.throws(() => prepareSvgImage(``, 10, 10), /svg/);
     });
 });

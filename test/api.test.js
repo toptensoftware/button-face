@@ -9,6 +9,7 @@ import * as core from "@toptensoftware/button-face";
 import * as node from "@toptensoftware/button-face/node";
 import { render as coreRender } from "../src/render.js";
 import { napiBackend } from "../src/backends/napi.js";
+import { browserBackend } from "../src/backends/browser.js";
 import { icons } from "../src/icons.js";
 import { createFsCache } from "../src/node/fsCache.js";
 import { pixelAt, pixels, importGraph, assertBrowserSafe, readFixture, pkg, tempDir, fakeFetch } from "./helpers.js";
@@ -42,14 +43,16 @@ test("core entry exports the portable API", () =>
     for (let name of ["render", "layerTypes", "createSvgResolver", "resolveBuiltinIcon",
         "parseColor", "colorsEqual", "formatColor", "applyColorMap", "lookupColor", "mapPaintValues",
         "findPaintValues", "getRootAttribute", "setRootAttribute", "substituteText",
-        "normalizeStyleLengths", "getSvgSize", "padViewBox", "createScaler", "scaleFont",
+        "normalizeStyleLengths", "getSvgSize", "padViewBox", "getViewBox", "prepareSvgImage", "createScaler", "scaleFont",
         "DEFAULT_VIRTUAL_SIZE", "wrapLines", "convertLegacyDefinition",
         "createMaterialResolver", "MATERIAL_DEFAULTS", "validateMaterialParams", "parseMaterialRef",
-        "materialVariant", "materialIconUrl", "materialCacheKey", "createStorageCache"])
+        "materialVariant", "materialIconUrl", "materialCacheKey", "createStorageCache", "browserBackend"])
     {
         assert.ok(name in core, `core is missing '${name}'`);
     }
     assert.equal(core.render, coreRender);
+    assert.equal(core.browserBackend, browserBackend);
+    assert.ok(!("createBrowserBackend" in core), "the fake-injection factory is module-internal");
     assert.equal(core.icons, icons);
     assert.equal(Object.keys(core.icons).length, 42);
 });
@@ -64,9 +67,10 @@ test("core import graph is browser-safe (no Node or native imports, no external 
 {
     let { files, external } = importGraph("src/index.js");
     assert.ok(files.includes("src/render.js") && files.includes("src/layers/text.js") && files.includes("src/icons.js")
-        && files.includes("src/material.js") && files.includes("src/storageCache.js"),
+        && files.includes("src/material.js") && files.includes("src/storageCache.js")
+        && files.includes("src/backends/browser.js"),
         `import graph not walked: ${files.join(", ")}`);
-    assert.ok(!files.some(f => f.startsWith("src/node") || f.startsWith("src/backends/")),
+    assert.ok(!files.some(f => f.startsWith("src/node") || f == "src/backends/napi.js"),
         `core reaches Node modules: ${files.join(", ")}`);
     assert.deepEqual(external, []);
     for (let file of files)

@@ -1,4 +1,5 @@
-// Rendering backend contract (types only - no runtime code).
+// Rendering backend contract (types), plus a tiny argument check shared by
+// the backends.
 //
 // The renderer paints layers onto a Canvas 2D context, so all it needs from a
 // platform is a way to make canvases and a way to decode SVG text into
@@ -40,4 +41,15 @@
  *   be decoded.
  */
 
-export {};
+/**
+ * Check a backend's `loadSvgImage` argument.
+ * @param {unknown} svg
+ * @param {string} fnName - prefix for the error message
+ * @returns {asserts svg is string}
+ * @throws {TypeError} unless `svg` is a non-blank string
+ */
+export function assertSvgSource(svg, fnName)
+{
+    if (typeof svg != "string" || !svg.trim())
+        throw new TypeError(`${fnName}: SVG source must be a non-empty string`);
+}

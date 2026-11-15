@@ -30,6 +30,11 @@ test("the only runtime dependency is @napi-rs/canvas (no sharp / node-canvas)", 
     assert.deepEqual(Object.keys(pkg.dependencies ?? {}), ["@napi-rs/canvas"]);
 });
 
+test("the only devDependency is playwright-core (browser tests; no bundled browsers)", () =>
+{
+    assert.deepEqual(Object.keys(pkg.devDependencies ?? {}), ["playwright-core"]);
+});
+
 test("every module reachable from the exports is shipped (in `files`) and exists", () =>
 {
     assert.deepEqual(Object.keys(pkg.exports), [".", "./node"]);

@@ -4,6 +4,7 @@
 
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 import { normalizeStyleLengths } from "../recolor.js";
+import { assertSvgSource } from "../backend.js";
 
 /**
  * Decode an SVG with Skia. Unitless lengths in `style` declarations get `px`
@@ -15,8 +16,7 @@ import { normalizeStyleLengths } from "../recolor.js";
  */
 async function loadSvgImage(svg)
 {
-    if (typeof svg != "string" || !svg.trim())
-        throw new TypeError("loadSvgImage: SVG source must be a non-empty string");
+    assertSvgSource(svg, "loadSvgImage");
     return await loadImage(Buffer.from(normalizeStyleLengths(svg)));
 }
 

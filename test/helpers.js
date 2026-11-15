@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 import { napiBackend } from "../src/backends/napi.js";
+import { drawSvgWith } from "./browser/ops.js";
 
 // Source icon access (icons/*.svg), shared with the generator.
 export { ICON_KEY, listIcons, readIcon } from "../scripts/build-icons.js";
@@ -120,19 +121,9 @@ export function importGraph(relPath)
  * @param {import("../src/backend.js").Backend} [backend]
  * @returns {Promise<{ data: Uint8ClampedArray, width: number, height: number, channels: 4 }>}
  */
-export async function drawSvg(svg, width, height, background, backend = napiBackend)
+export function drawSvg(svg, width, height, background, backend = napiBackend)
 {
-    let canvas = backend.createCanvas(width, height);
-    let ctx = canvas.getContext("2d");
-    if (background)
-    {
-        ctx.fillStyle = background;
-        ctx.fillRect(0, 0, width, height);
-    }
-    let img = await backend.loadSvgImage(svg, width, height);
-    ctx.drawImage(img, 0, 0, width, height);
-    let data = ctx.getImageData(0, 0, width, height).data;
-    return { data, width, height, channels: 4 };
+    return drawSvgWith(backend, svg, width, height, background);
 }
 
 /**
@@ -232,6 +223,56 @@ export function inkStats(result)
     }
     let color = coverage ? { r: Math.round(r / coverage), g: Math.round(g / coverage), b: Math.round(b / coverage) } : null;
     return { coverage: Math.round(coverage * 10) / 10, bounds: findInkBounds(result), color };
+}
+
+/**
+ * Per-pixel difference between two same-sized renders, on premultiplied
+ * RGBA (so the colour of nearly transparent pixels, which un-premultiplying
+ * makes arbitrary, doesn't count; alpha is 255 for 3-channel results):
+ * - `max`: largest per-channel difference anywhere (0..255)
+ * - `mean`: mean per-channel difference over all pixels and RGBA channels
+ * - `bad`: percentage of pixels whose largest channel difference > `threshold`
+ * - `bounds`: largest edge shift (px) between the two images' ink bounds,
+ *   where ink = differs from `a`'s top-left pixel by more than 32 (`null`
+ *   when exactly one image has no ink, 0 when neither has)
+ * @param {object} a
+ * @param {object} b
+ * @param {number} [threshold]
+ * @returns {{ max: number, mean: number, bad: number, bounds: number|null }}
+ */
+export function diffStats(a, b, threshold = 64)
+{
+    assert.deepEqual([b.width, b.height], [a.width, a.height], "diffStats: size mismatch");
+    // Premultiplied RGBA copies (4 channels), used for every metric.
+    let premultiplied = image => ({ width: image.width, height: image.height, channels: 4,
+        data: Float64Array.from([...pixels(image)].flatMap(([, , p]) => [p.r * p.a / 255, p.g * p.a / 255, p.b * p.a / 255, p.a])) });
+    a = premultiplied(a);
+    b = premultiplied(b);
+    let max = 0, sum = 0, bad = 0;
+    for (let i = 0; i < a.data.length; i += 4)
+    {
+        let d = 0;
+        for (let ch = 0; ch < 4; ch++)
+        {
+            let v = Math.abs(a.data[i + ch] - b.data[i + ch]);
+            sum += v;
+            d = Math.max(d, v);
+        }
+        max = Math.max(max, d);
+        if (d > threshold)
+            bad++;
+    }
+    let pixelCount = a.width * a.height;
+    let background = pixelAt(a, 0, 0);
+    let ba = findInkBounds(a, background), bb = findInkBounds(b, background);
+    let bounds = !ba && !bb ? 0 : !ba || !bb ? null
+        : Math.max(...["left", "top", "right", "bottom"].map(k => Math.abs(ba[k] - bb[k])));
+    return {
+        max: Math.round(max),
+        mean: Math.round(sum / (pixelCount * 4) * 100) / 100,
+        bad: Math.round(bad / pixelCount * 10000) / 100,
+        bounds,
+    };
 }
 
 /**

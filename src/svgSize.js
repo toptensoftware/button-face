@@ -1,9 +1,10 @@
-// SVG natural size (from the root width/height/viewBox) and viewBox padding.
+// SVG natural size (from the root width/height/viewBox), viewBox padding and
+// preparing markup for image decoders (prepareSvgImage).
 // Pure string functions, browser-safe; used so scaling maths doesn't depend on
 // a renderer's metadata.
 
 import { NUMBER } from "./color.js";
-import { getRootAttribute, setRootAttribute } from "./recolor.js";
+import { getRootAttribute, setRootAttribute, normalizeStyleLengths } from "./recolor.js";
 
 /** Default size of an SVG with no usable width/height/viewBox (CSS replaced element default). */
 const DEFAULT_WIDTH = 300;
@@ -72,8 +73,22 @@ export function getSvgSize(svg)
     return { width: width ?? DEFAULT_WIDTH, height: height ?? DEFAULT_HEIGHT };
 }
 
+/**
+ * The root viewBox, or - when it is missing or invalid - one at the origin
+ * with the natural size (`getSvgSize`), i.e. the user-space box the content
+ * is drawn in.
+ * @param {string} svg
+ * @returns {{x: number, y: number, width: number, height: number}}
+ * @throws if the document's root element is not `<svg>`
+ */
+export function getViewBox(svg)
+{
+    return parseViewBox(getRootAttribute(svg, "viewBox")) ?? { x: 0, y: 0, ...getSvgSize(svg) };
+}
+
 // Format a viewBox number without float noise (e.g. 143.99999999999997 -> 144).
 const tidy = v => String(+v.toPrecision(12));
+const formatViewBox = ({ x, y, width, height }) => [x, y, width, height].map(tidy).join(" ");
 
 /**
  * Pad the root viewBox by `fraction` of its width/height on each side
@@ -92,8 +107,35 @@ export function padViewBox(svg, fraction = 0)
         return svg;
     if (!(fraction > -0.5))
         throw new RangeError(`padViewBox: fraction must be > -0.5, got ${fraction}`);
-    let { x, y, width, height } = parseViewBox(getRootAttribute(svg, "viewBox")) ?? { x: 0, y: 0, ...getSvgSize(svg) };
+    let { x, y, width, height } = getViewBox(svg);
     let dx = width * fraction;
     let dy = height * fraction;
-    return setRootAttribute(svg, "viewBox", [x - dx, y - dy, width + 2 * dx, height + 2 * dy].map(tidy).join(" "));
+    return setRootAttribute(svg, "viewBox", formatViewBox({ x: x - dx, y: y - dy, width: width + 2 * dx, height: height + 2 * dy }));
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/**
+ * Prepare SVG markup for decoding as an image at a given draw size (e.g. by a
+ * browser `Image`): adds a viewBox from the natural size when the root has no
+ * valid one (so the content scales rather than the viewport growing), stamps
+ * the root `width`/`height` with the draw size (so it rasterises crisply at
+ * that size, and Firefox gets an intrinsic size), adds the SVG `xmlns` when
+ * missing (SVG-as-image is parsed strictly as XML) and applies
+ * `normalizeStyleLengths`. Nested `<svg>` elements are untouched.
+ * @param {string} svg
+ * @param {number} width - draw width in device px
+ * @param {number} height - draw height in device px
+ * @returns {string}
+ * @throws if the document's root element is not `<svg>`
+ */
+export function prepareSvgImage(svg, width, height)
+{
+    if (!parseViewBox(getRootAttribute(svg, "viewBox")))
+        svg = setRootAttribute(svg, "viewBox", formatViewBox(getViewBox(svg)));
+    svg = setRootAttribute(svg, "width", String(width));
+    svg = setRootAttribute(svg, "height", String(height));
+    if (getRootAttribute(svg, "xmlns") === undefined)
+        svg = setRootAttribute(svg, "xmlns", SVG_NS);
+    return normalizeStyleLengths(svg);
 }

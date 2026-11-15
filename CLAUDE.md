@@ -95,9 +95,23 @@ the way (relevant files, APIs, gotchas, decisions made).
   (package.json `exports`): `src/index.js` = portable core, `src/node.js` =
   core + Node defaults (`napiBackend`, file resolver, `render` with defaults).
 - **Browser-safe core:** nothing reachable from `src/index.js` may import
-  `node:*`, `fs`, `path` or `@napi-rs/*` (enforced by `test/api.test.js`).
-  Node-only code lives in `src/node.js`, `src/node/` and
-  `src/backends/napi.js` (the only importer of `@napi-rs/canvas`).
+  `node:*`, `fs`, `path` or `@napi-rs/*`, nor `src/backends/napi.js`
+  (enforced by `test/api.test.js`). Node-only code lives in `src/node.js`,
+  `src/node/` and `src/backends/napi.js` (the only importer of
+  `@napi-rs/canvas`).
+- Backends: `napiBackend` (`src/backends/napi.js`, Node entry) and
+  `browserBackend` (`src/backends/browser.js`, core entry; globals looked
+  up at call time, `createBrowserBackend(env)` for fakes in tests).
+  Browser `createCanvas` = `OffscreenCanvas`, else `<canvas>`;
+  `loadSvgImage` = Blob URL + `Image.decode()`, main thread only (no
+  `Image` in workers). Both share `assertSvgSource` (`src/backend.js`).
+  Browsers need `prepareSvgImage(svg, w, h)` (`src/svgSize.js`: adds
+  viewBox/`xmlns` when missing, stamps width/height, normalises style
+  lengths) - `xmlns` is essential, the rest defensive.
+- Sample corpus: `scripts/sample-defs.js` (browser-safe) is shared by
+  `npm run samples`, the browser demo (`scripts/browser-demo/`) and
+  `test/browser-compare.test.js`. `scripts/static-server.js` is the one
+  static server (demo + browser tests).
 - `render(definition, w, h, { backend, resolveSvg, channels })` paints layers
   through a Canvas-2D backend (`createCanvas`, `loadSvgImage`) and returns
   `{ data: Uint8Array, width, height, channels }`.
@@ -148,6 +162,22 @@ the way (relevant files, APIs, gotchas, decisions made).
 - No build step (plain ESM JavaScript).
 - Verify with `npm test` (Node's built-in `node:test` runner); it must pass with
   0 failures.
+- Browser tests (`test/browser*.test.js`) drive real browsers through the
+  `playwright-core` devDependency: Chromium via installed Chrome, then
+  Edge (`channel`); Firefox and WebKit via Playwright-managed builds
+  (`node node_modules/playwright-core/cli.js install firefox webkit`,
+  re-run after upgrading `playwright-core`). Engines that can't launch are
+  skipped with a reason. `BUTTON_FACE_BROWSER_TESTS`: unset = run what's
+  available, `0` = skip all, `1` = fail if no engine launches.
+- Browser-vs-Node pixel comparison of every sample is in
+  `test/browser-compare.test.js` (tolerances in its header; text differs
+  by font metrics). Shared backend contract cases: `test/backend-cases.js`.
+- `node --test` loads every `.js` under `test/`, including the page-side
+  files in `test/browser/` - they must have no side effects outside a
+  browser and use relative imports.
+- `npm run samples:browser` serves a demo page (default port 8080) that
+  renders every sample with `browserBackend` beside the `npm run samples`
+  PNGs, for visual review in any browser.
 
 
 
