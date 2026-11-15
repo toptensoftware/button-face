@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { render } from "../src/render.js";
 import { napiBackend } from "../src/backends/napi.js";
-import { pixelAt, expectAllPixels, expectColorNear, assertBrowserSafe } from "./helpers.js";
+import { pixelAt, expectAllPixels, expectColorNear, assertBrowserSafe, importGraph } from "./helpers.js";
 
 const opts = { backend: napiBackend };
 const BLACK = { r: 0, g: 0, b: 0, a: 255 };
@@ -174,8 +174,8 @@ test("larger render: every pixel painted", async () =>
     expectAllPixels(result, RED, 0);
 });
 
-test("src/render.js and src/layers/*.js are browser-safe", () =>
+test("src/render.js and everything it imports are browser-safe", () =>
 {
-    for (let file of ["src/render.js", "src/layers/fill.js", "src/layers/svg.js", "src/layers/text.js"])
+    for (let file of importGraph("src/render.js").files)
         assertBrowserSafe(file);
 });

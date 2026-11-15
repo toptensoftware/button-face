@@ -782,6 +782,73 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   (`inkShift` in layers-text.test.js), which are exact to +/-1px.
 - Tests: `test/layers-text.test.js` (26). `npm test`: 573 tests, 573 pass.
 
+### Implement step 13 (entry points) - learnings
+- `package.json` `exports`: `"."` -> `./src/index.js`, `"./node"` ->
+  `./src/node.js`. Package self-reference works in tests (`import ... from
+  "@toptensoftware/button-face/node"`).
+- `src/index.js` (core) re-exports by name (not `export *`, so internals like
+  `NUMBER`, `layoutText`, `validate.js` stay private): `render`,
+  `layerTypes`, `createSvgResolver`, `resolveBuiltinIcon`, `icons`,
+  `parseColor`, `colorsEqual`, `formatColor`, `namedColors`, the recolor fns
+  (`applyColorMap`, `mapPaintValues`, `findPaintValues`, `getRootAttribute`,
+  `setRootAttribute`, `setRootColor`, `substituteText`,
+  `normalizeStyleLengths`), svgSize fns (`getSvgSize`, `padViewBox`,
+  `parseViewBox`, `parseLength`), `createScaler`, `scaleFont`,
+  `DEFAULT_VIRTUAL_SIZE`, `wrapLines`.
+- `src/node.js`: `export * from "./index.js"` plus `napiBackend`,
+  `createFileResolver`, **`createNodeSvgResolver({ baseDir, prefixes })`**
+  (built-ins + extra prefixes, file fallback), **`resolveSvg`** (the default
+  instance) and a **`render(def, w, h, options?)`** that overrides the
+  star-exported core `render` (a local export shadows `export *`). Defaults
+  are applied with `??`, so `{ backend: undefined }` keeps the default. The
+  material job should register `@` in `createNodeSvgResolver`'s defaults.
+- `test/helpers.js` gained **`importGraph(relPath)`** -> `{ files, external }`
+  (static `import`/`export ... from` and bare `import "x"`, relative
+  specifiers followed). `api.test.js` asserts the core graph has no external
+  specifiers at all and every file passes `assertBrowserSafe`; a companion
+  test proves the walker does see `@napi-rs/canvas`/`node:fs/promises` from
+  `src/node.js`. `render.test.js`'s browser-safe test now walks
+  `importGraph("src/render.js")` instead of a hand-written file list.
+- Gotcha: the built-in `#heart` is an **outline** (Material
+  `favorite_border`), so its centre is background; the smoke test checks
+  the red ink's bounding-box centre instead (moved up 7 virtual px).
+- `test/api.test.js`: 16 tests. `npm test`: 589 tests, 589 pass.
+
+### Implement step 14 (sample renders) - learnings
+- `scripts/render-samples.js` (`npm run samples`; optional arg = output dir,
+  default `scratch/samples/`) uses only the public Node entry
+  (`render`, `icons`, `napiBackend`). Writes `<outDir>/<group>/NN-<label>
+  [-rgba].png` (147 samples, ~1 s) and **`<outDir>/contact-sheet.png`**
+  (1200 px wide, labelled, grouped; RGBA cells over a dark checkerboard so
+  white text stays visible). Each run clears only its own group folders.
+- Groups: `icons-default` (all 42, default grey on black), `icons-color`
+  (all 42, `#1565c0` on white - fixed-colour icons stay fixed),
+  `icon-categories` (144 px, gold: Material fill attr / Material outline /
+  Inkscape style fill / stroke->path / fixed hdd, steam, playstation,
+  apple-tv), `recolour` (`color` named/rgb()/hsl(), `colors` single,
+  2-entry swap and rgb() key on an old-style `#848484` user SVG, `tint` on
+  steam/hdd/playstation and with 50% alpha, `opacity`, `$(x)` + `colors`),
+  `text-align` (3x3 align/valign, 12px so valign is visible), `text-misc`
+  (single line, `\n`, over-wide word, 4-line wrap, lineSpacing, padding,
+  translate, serif/bold 28/italic fonts, 144 px), `combos` (old typical
+  "icon up 7 + bottom label" incl. the old `test.js` apple-tv/#404040/
+  "Hello!", text-on-top, scaled icon, stacked svgs, 144 px), `sizes` (Notes
+  example at 72/96/144 RGB, 72/144 RGBA without fill, half-alpha fill,
+  144x72 non-square with matching virtualSize).
+- PNG encoding: raw result -> `napiBackend.createCanvas` + `createImageData`/
+  `putImageData` (RGB expanded) -> `canvas.toBuffer("image/png")`. Uses
+  napi-canvas extras beyond the Backend contract - fine for a Node script.
+- Visual check (by the implementing agent): all icons render and recolour;
+  fixed-colour parts (hdd red dot, steam/playstation/apple-tv) unaffected by
+  `color`; tint monochromes them; align/valign/wrap/padding/translate/
+  lineSpacing behave as specified; scaling at 96/144 is proportional. Known,
+  expected: "Supercalifragilistic" overflows both sides (old behaviour -
+  over-wide words aren't clipped/shrunk); at 72 px the default bold 16px
+  label sits close to an icon nudged up 7 (same as old project).
+- `test/samples.test.js` (2): `npm run samples` script entry exists; running
+  the script into a temp dir writes > 100 PNGs incl. `contact-sheet.png`
+  (PNG signature checked). `npm test`: 591 tests, 591 pass.
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -1067,6 +1134,27 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
   size"; an unparseable font is silently ignored by the canvas (keeps the
   previous/default font), as in browsers.
 
+### Implement step 13 - for user review
+- Core exports a curated named list (above) rather than `export *` from
+  every module; `layoutText`/`lineHeight` and `validate.js` helpers are not
+  public.
+- Node entry names: `render` (with defaults), `resolveSvg` (default
+  resolver instance), `createNodeSvgResolver`, `createFileResolver`,
+  `napiBackend`. No PNG-encoding helper in the API (the samples script
+  encodes via @napi-rs/canvas itself) - easy to add (`toPng(result)`) if
+  wanted.
+- `src/backend.js` (typedefs only) is not imported by either entry.
+
+### Implement step 14 - for user review
+- Sample set differs from the plan's list: the Notes example is rendered at
+  72/96/144 as planned, but instead of "all 42 recoloured" in one colour the
+  icons appear twice (default grey on black; blue on white) plus a 144 px
+  category group; recolouring is shown in its own group. Samples were not
+  compared against the old project's renders (only against the spec) - the
+  librsvg-reference test already covers icon likeness.
+- The samples test spawns the script (CLI) rather than importing a
+  function, since the script is CLI-only.
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -1248,7 +1336,7 @@ ask the user to review.
   font px scaled by sy only; default font/colour/padding match old defaults.
   Uses `wrapLines`, `scaleFont`, `createScaler` (no duplicated maths). Draw
   with `textBaseline="top"`, `textAlign` per align, as in old `drawText.js`.
-- [ ] 13. **Public entry points.** Tests first (`test/api.test.js`): import
+- [x] 13. **Public entry points.** Tests first (`test/api.test.js`): import
   `@toptensoftware/button-face` (package self-reference) and
   `@toptensoftware/button-face/node`; core entry exports `render`,
   `createSvgResolver`, `icons`, `parseColor`, `applyColorMap` and imports
@@ -1260,7 +1348,7 @@ ask the user to review.
   `#heart` red + bottom text) at 72x72 and 144x144 RGB/RGBA - correct lengths,
   heart region red-ish, text region has white ink. Add `exports` map to
   `package.json` (`.` -> `src/index.js`, `./node` -> `src/node.js`).
-- [ ] 14. **[visual] Sample renders for human review.** Add
+- [x] 14. **[visual] Sample renders for human review.** Add
   `scripts/render-samples.js` (`npm run samples`) writing PNGs to `scratch/`:
   all 42 icons default + recoloured, the Notes example definition at 72/96/144
   px, text alignment/valign/wrap grid, tint example. Not automatically

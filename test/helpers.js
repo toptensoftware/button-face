@@ -16,6 +16,36 @@ export function assertBrowserSafe(relPath)
 }
 
 /**
+ * Walk the static import graph of a source module (path relative to the repo
+ * root), following relative specifiers (`import`/`export ... from`, static
+ * only). Returns `{ files, external }`: every module reached (repo-relative
+ * paths, entry first) and every non-relative specifier seen.
+ * @param {string} relPath e.g. "src/index.js"
+ * @returns {{ files: string[], external: string[] }}
+ */
+export function importGraph(relPath)
+{
+    let files = [], external = new Set(), pending = [relPath];
+    while (pending.length)
+    {
+        let file = pending.shift();
+        if (files.includes(file))
+            continue;
+        files.push(file);
+        let source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+        for (let [, fromSpec, bareSpec] of source.matchAll(/^\s*(?:import|export)\b[^;'"]*?\bfrom\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']/gm))
+        {
+            let spec = fromSpec ?? bareSpec;
+            if (spec.startsWith("."))
+                pending.push(new URL(spec, new URL(`../${file}`, import.meta.url)).href.slice(new URL("../", import.meta.url).href.length));
+            else
+                external.add(spec);
+        }
+    }
+    return { files, external: [...external] };
+}
+
+/**
  * Rasterise an SVG string onto a new transparent canvas of the given size,
  * through a rendering backend (default: the Node backend).
  * @param {string} svg

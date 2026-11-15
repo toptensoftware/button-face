@@ -12,13 +12,18 @@
   "engines": {
     "node": ">=24"
   },
+  "exports": {
+    ".": "./src/index.js",
+    "./node": "./src/node.js"
+  },
   "files": [
     "src/",
     "LICENSE"
   ],
   "scripts": {
     "test": "node --test",
-    "build:icons": "node scripts/build-icons.js"
+    "build:icons": "node scripts/build-icons.js",
+    "samples": "node scripts/render-samples.js"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.1.1"
