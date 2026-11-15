@@ -1,4 +1,4 @@
-// Plan step 8: rendering backend contract (src/backend.js) and the Node
+// Rendering backend contract (src/backend.js) and the Node
 // backend (src/backends/napi.js, @napi-rs/canvas / Skia).
 
 import { test } from "node:test";
@@ -91,7 +91,7 @@ test("loadSvgImage applies normalizeStyleLengths (unitless stroke-width in style
     assert.equal(pixelAt(result, 20, 50).a, 0, "stroke too wide");
 });
 
-// Known Skia (@napi-rs/canvas 1.1.1) quirk, see wip/wip-initial.md step 3:
+// Known Skia (@napi-rs/canvas 1.1.1) quirk (see README "SVG authoring notes"):
 // a *unitless* `stroke-width` inside `style="..."` is ignored (falls back to 1
 // user unit); it works with a `px` unit (and as an attribute). Browsers and
 // librsvg accept it. The built-in icons avoid strokes altogether (see

@@ -20,6 +20,18 @@ export function validColor(type, name, value)
 }
 
 /**
+ * Check a property is a finite number greater than 0.
+ * @param {string} type - layer type, for the error message
+ * @param {string} name - property name, for the error message
+ * @param {unknown} value
+ */
+export function validatePositive(type, name, value)
+{
+    if (typeof value != "number" || !(value > 0 && value < Infinity))
+        throw new TypeError(`${type} layer: '${name}' must be a positive number; got ${JSON.stringify(value)}`);
+}
+
+/**
  * Check a `translate` property: null/undefined or `{ x?, y? }` finite numbers.
  * @param {string} type - layer type, for the error message
  * @param {unknown} t

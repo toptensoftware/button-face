@@ -3,15 +3,12 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
 import { getSvgSize, parseLength, parseViewBox, padViewBox } from "../src/svgSize.js";
 import { getRootAttribute } from "../src/recolor.js";
+import { listIcons, readIcon, readFixture } from "./helpers.js";
 
-const root = new URL("../", import.meta.url);
-const iconsDir = new URL("icons/", root);
-const iconNames = readdirSync(iconsDir).filter(f => f.endsWith(".svg")).map(f => f.slice(0, -4)).sort();
-const readIcon = name => readFileSync(new URL(`${name}.svg`, iconsDir), "utf8");
-const materialHome = readFileSync(new URL("test/fixtures/material-home.svg", root), "utf8");
+const iconNames = listIcons();
+const materialHome = readFixture("material-home.svg");
 
 const NS = `xmlns="http://www.w3.org/2000/svg"`;
 const svg = attrs => `<svg ${NS} ${attrs}><rect width="1" height="1"/></svg>`;

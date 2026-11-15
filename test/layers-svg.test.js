@@ -1,15 +1,14 @@
-// Plan step 11: the svg layer (src/layers/svg.js) - the old project's
+// The svg layer (src/layers/svg.js) - the old project's
 // svgCode/svgFile, svgText, svgForeColor, svgScale and svgTranslate, plus the
 // new colour map, root `color` and `tint`.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { render } from "../src/render.js";
 import { napiBackend } from "../src/backends/napi.js";
 import { createSvgResolver } from "../src/resolve.js";
 import { setRootAttribute } from "../src/recolor.js";
-import { pixelAt, pixels, findInkBounds, expectColorNear, expectAllPixels } from "./helpers.js";
+import { pixelAt, opaquePixels, findInkBounds, expectColorNear, expectAllPixels, readFixture } from "./helpers.js";
 
 const opts = { backend: napiBackend, resolveSvg: createSvgResolver(), channels: 4 };
 const draw = (layer, w = 72, h = 72, extra = {}) =>
@@ -25,7 +24,6 @@ const TRANSPARENT = { r: 0, g: 0, b: 0, a: 0 };
 const box = (w, h, fill = "#848484") =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="${fill}"/></svg>`;
 
-const opaquePixels = result => [...pixels(result)].map(([, , p]) => p).filter(p => p.a == 255);
 
 // The most opaque pixel on the left half of the middle row (the #square /
 // #circle icons are ~2.6px outlines, so no pixel may be fully covered).
@@ -92,7 +90,7 @@ test("#hdd keeps its red regardless of color", async () =>
 // The material-icon path (no network): a source normalised to root
 // fill="currentColor" with unpainted paths.
 const materialHome = setRootAttribute(
-    readFileSync(new URL("fixtures/material-home.svg", import.meta.url), "utf8"), "fill", "currentColor");
+    readFixture("material-home.svg"), "fill", "currentColor");
 
 test("root fill=currentColor + unpainted paths: color red -> red ink", async () =>
 {

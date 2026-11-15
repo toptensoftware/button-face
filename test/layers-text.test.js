@@ -1,4 +1,4 @@
-// Plan step 12: the text layer (src/layers/text.js) - the old project's
+// The text layer (src/layers/text.js) - the old project's
 // text, font, textColor, textPadding, textAlign, textVerticalAlign,
 // textLineSpacing and textTranslate (old drawText.js).
 //

@@ -17,7 +17,7 @@
 // offscreen canvas + `source-in`). Sizes and positions round like the old
 // sharp-based renderer; anything outside the button is clipped by the canvas.
 
-import { validColor, validateTranslate } from "./validate.js";
+import { validColor, validatePositive, validateTranslate } from "./validate.js";
 import { applyColorMap, setRootColor, substituteText } from "../recolor.js";
 import { getSvgSize } from "../svgSize.js";
 
@@ -30,8 +30,7 @@ export async function svgLayer(layer, { width, height, scaler, backend, resolveS
     let { text, colors, color = DEFAULT_COLOR, tint, scale = 1, translate } = layer;
     let colorValue = validColor("svg", "color", color);
     let tintValue = tint == null ? null : validColor("svg", "tint", tint);
-    if (typeof scale != "number" || !(scale > 0 && scale < Infinity))
-        throw new TypeError(`svg layer: 'scale' must be a positive number; got ${JSON.stringify(scale)}`);
+    validatePositive("svg", "scale", scale);
     validateTranslate("svg", translate);
 
     let svg = await loadSource(layer, resolveSvg);

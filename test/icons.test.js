@@ -3,24 +3,20 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { drawSvg, inkStats } from "./helpers.js";
+import { readFileSync } from "node:fs";
+import { drawSvg, inkStats, expectColorNear, readFixture, listIcons, readIcon, ICON_KEY as KEY } from "./helpers.js";
 import { findPaintValues, mapPaintValues, setRootColor } from "../src/recolor.js";
 import { colorsEqual } from "../src/color.js";
 import { icons } from "../src/icons.js";
 import { generateIconsModule } from "../scripts/build-icons.js";
 
 const root = new URL("../", import.meta.url);
-const iconsDir = new URL("icons/", root);
-const iconNames = readdirSync(iconsDir).filter(f => f.endsWith(".svg")).map(f => f.slice(0, -4)).sort();
-// LF-normalised like the generator (git stores LF, but an old checkout may be CRLF).
-const readIcon = name => readFileSync(new URL(`${name}.svg`, iconsDir), "utf8").replace(/\r\n?/g, "\n");
+const iconNames = listIcons();
 
 // librsvg (old project) render stats of the original icons at 72x72; see
 // scripts/build-icon-reference.js.
-const reference = JSON.parse(readFileSync(new URL("test/fixtures/icon-reference.json", root), "utf8"));
+const reference = JSON.parse(readFixture("icon-reference.json"));
 const SIZE = 72;
-const KEY = "#848484"; // recolour key in icons/*.svg; the old default colour
 
 const paintValues = (svg, name) => findPaintValues(svg).filter(p => p.name == name).map(p => p.value);
 
@@ -114,15 +110,6 @@ test("fixed-colour exceptions are preserved", () =>
 
 // ---- Rendering ---------------------------------------------------------------
 
-function expectColorClose(actual, expected, tolerance = 4)
-{
-    for (let ch of ["r", "g", "b"])
-    {
-        assert.ok(Math.abs(actual[ch] - expected[ch]) <= tolerance,
-            `colour ${JSON.stringify(actual)} vs expected ${JSON.stringify(expected)}`);
-    }
-}
-
 // Loose visual confidence check: the generated icon, coloured with the old
 // default via root `color`, renders in Skia close to the original librsvg
 // output (ink amount, extent and average colour).
@@ -140,7 +127,7 @@ for (let name of iconNames)
             assert.ok(Math.abs(actual.bounds[k] - expected.bounds[k]) <= 1,
                 `bounds ${JSON.stringify(actual.bounds)} vs reference ${JSON.stringify(expected.bounds)}`);
         }
-        expectColorClose(actual.color, expected.color);
+        expectColorNear(actual.color, expected.color, 4);
     });
 }
 
@@ -153,6 +140,6 @@ for (let name of iconNames.filter(n => JSON.stringify(reference[n].color) == JSO
     test(`icons.${name} recolours via root color`, async () =>
     {
         let svg = setRootColor(icons[name], "#ff0000");
-        expectColorClose(inkStats(await drawSvg(svg, SIZE, SIZE)).color, { r: 255, g: 0, b: 0 });
+        expectColorNear(inkStats(await drawSvg(svg, SIZE, SIZE)).color, { r: 255, g: 0, b: 0 }, 4);
     });
 }

@@ -1,4 +1,4 @@
-// Plan step 10: the fill layer (src/layers/fill.js) - whole-button colour,
+// The fill layer (src/layers/fill.js) - whole-button colour,
 // the old project's `backColor`.
 
 import { test } from "node:test";

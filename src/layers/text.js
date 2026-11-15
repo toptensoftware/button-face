@@ -18,7 +18,7 @@
 
 import { wrapLines } from "../wrapLines.js";
 import { scaleFont } from "../scale.js";
-import { validColor, validateTranslate } from "./validate.js";
+import { validColor, validatePositive, validateTranslate } from "./validate.js";
 
 const ALIGN = ["left", "center", "right"];
 const VALIGN = ["top", "center", "bottom"];
@@ -91,8 +91,7 @@ export function textLayer(layer, { width, height, scaler })
         throw new TypeError(`text layer: 'align' must be one of ${ALIGN.join(", ")}; got ${JSON.stringify(align)}`);
     if (!VALIGN.includes(valign))
         throw new TypeError(`text layer: 'valign' must be one of ${VALIGN.join(", ")}; got ${JSON.stringify(valign)}`);
-    if (typeof lineSpacing != "number" || !(lineSpacing > 0 && lineSpacing < Infinity))
-        throw new TypeError(`text layer: 'lineSpacing' must be a positive number; got ${JSON.stringify(lineSpacing)}`);
+    validatePositive("text", "lineSpacing", lineSpacing);
     if (typeof font != "string")
         throw new TypeError(`text layer: 'font' must be a CSS font string; got ${JSON.stringify(font)}`);
     validateTranslate("text", translate);

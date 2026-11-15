@@ -1,6 +1,6 @@
 # Initial Port
 
-Status: Implement
+Status: Implement - all steps done; ready for Complete (coordinator renames)
 
 ## Description
 
@@ -849,6 +849,91 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   the script into a temp dir writes > 100 PNGs incl. `contact-sheet.png`
   (PNG signature checked). `npm test`: 591 tests, 591 pass.
 
+### Implement step 15 (final review) - learnings
+- **Description check:** every item is covered: caching dropped; colour
+  map + `currentColor`/`color` + `tint` recolouring; typed layers (fill, svg,
+  text); Node 24 target with a browser-safe core and Canvas-2D backend
+  abstraction; colour replacement, scaling, text, `$(x)` kept; virtual pixels
+  kept; 42 built-in icons + generator + staleness test; git/GitHub; v0.0.1;
+  MIT `Copyright © 2026 Topten Software`; 592 tests; README limited to the
+  user-requested SVG authoring note.
+- **Gaps / follow-ups (not fixed, by design or out of scope):**
+  - No browser backend yet and no browser test run - browser-safety is only
+    enforced statically (import-graph test). First real browser use should
+    add a backend (`OffscreenCanvas` + `createImageBitmap`) and e.g. vitest
+    browser mode.
+  - `hdd` icon uses the Impact font in `<text>` - renders differently where
+    Impact isn't installed (non-Windows, browsers without it).
+  - No PNG helper in the public API (samples script encodes itself).
+  - No `.d.ts`/`checkJs` - JSDoc only.
+  - `scripts/build-icon-reference.js` needs the sibling `../node-buttonImage`
+    (sharp + original images) to regenerate the reference fixture.
+  - 5 icons are CRLF in this working tree only (git index is LF); harmless.
+- **Leftover grep:** no `sharp`/`canvas`(node-canvas) imports in `src/`
+  (only provenance comments in `svg.js` and the reference script); only
+  dependency is `@napi-rs/canvas` (now asserted in `package.test.js`). No
+  caching code. `#848484` only as the svg layer default (`svg.js`), the
+  generator key (`build-icons.js`, now exported as `ICON_KEY`), generated
+  `src/icons.js` header, samples and tests. No `not implemented` stubs left.
+- **DRY fixes made (no behaviour change):**
+  - `validatePositive(type, name, value)` added to `src/layers/validate.js`;
+    used for svg `scale` and text `lineSpacing` (same messages).
+  - `scripts/build-icons.js` now exports `ICON_KEY`, `listIcons()`,
+    `readIcon(name)` (LF-normalised); `test/helpers.js` re-exports them and
+    adds `readRepoFile`, `readFixture`, `pkg`, `opaquePixels`. Removed the
+    copies of icon listing/reading, fixture reading, package.json reading,
+    `opaquePixels` and `expectColorClose` (= `expectColorNear`) from
+    icons/svgSize/recolor/resolve/api/samples/package/layers-svg tests.
+  - `test/spike-icons.test.js` renamed `test/skia-svg.test.js` (git mv);
+    stale "spike" header and "moved to ..." breadcrumbs removed, duplicate
+    "all 42 icons present" test removed (icons.test.js covers it).
+  - Test file headers no longer say "Plan step N" (the doc is being
+    renamed); backend.test's quirk note points at the README instead.
+- **Packaging:** `package.json` OK (0.0.1, MIT, engines `>=24`, `exports`
+  `.`/`./node`, `files` `src/` + `LICENSE`). New test: every module reachable
+  from each export exists and is covered by `files`. `npm pack --dry-run`:
+  20 files, 35.3 kB packed / 129.8 kB unpacked - LICENSE, README.md,
+  package.json and the 17 `src/` modules (incl. `src/icons.js` 70.7 kB); no
+  tests, scripts, icons sources, scratch or wip.
+- `npm test`: 592 tests, 592 pass (591 - 1 duplicate + 2 package tests).
+
+### Proposed CLAUDE.md updates (pending user approval)
+Rule 4 proposals collected during the job, as one addition:
+
+```markdown
+## Architecture
+- Plain JavaScript ESM + JSDoc, no build step. Two entry points
+  (package.json `exports`): `src/index.js` = portable core, `src/node.js` =
+  core + Node defaults (`napiBackend`, file resolver, `render` with defaults).
+- **Browser-safe core:** nothing reachable from `src/index.js` may import
+  `node:*`, `fs`, `path` or `@napi-rs/*` (enforced by `test/api.test.js`).
+  Node-only code lives in `src/node.js`, `src/node/` and
+  `src/backends/napi.js` (the only importer of `@napi-rs/canvas`).
+- `render(definition, w, h, { backend, resolveSvg, channels })` paints layers
+  through a Canvas-2D backend (`createCanvas`, `loadSvgImage`) and returns
+  `{ data: Uint8Array, width, height, channels }`.
+- Layer types: one module per type in `src/layers/`, registered in
+  `layerTypes` (`src/render.js`). Signature `(layer, env) => Painter |
+  Promise<Painter>`: validate and do async work up front, return a sync
+  painter. The core handles `visible`/`opacity`. Shared validation:
+  `src/layers/validate.js`.
+- Shared code - reuse, don't duplicate: `color.js` (CSS colours),
+  `recolor.js` (the one SVG markup/paint tokeniser), `scale.js` (all
+  virtual -> device px maths), `svgSize.js`; tests use `test/helpers.js`.
+- SVG references go through async prefix resolvers (`src/resolve.js`).
+  Resolvers return SVG strings; monochrome sources normalise their
+  foreground to `currentColor`.
+
+## Built-in icons
+- Sources are `icons/*.svg` (grey `#848484` is the recolour key). After
+  adding/editing one, run `npm run build:icons` to regenerate `src/icons.js`
+  (generated - never edit by hand; a test fails if it is stale).
+- Built-in icons must be **filled paths only - no strokes**. Convert with
+  `node scripts/strokes-to-paths.js icons/<name>.svg` (needs Inkscape).
+- `npm run samples` renders PNGs + a contact sheet to `scratch/samples/` for
+  visual review (rendering output can't be fully verified by tests).
+```
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -938,6 +1023,62 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
   cache) in the Node entry defaults.
 
 ## Flagged assumptions
+### Consolidated summary (step 15)
+[C] = confirmed by the user; [R] = still for user review. Detail per step
+follows below.
+
+**API and project**
+- [C] Pure `render(definition, w, h, opts)`; `ButtonImage` class, caching and
+  `states`/`state` dropped (the definition-update job decides how to convert
+  old `states`).
+- [C] Result `{ data: Uint8Array, width, height, channels }`, RGB (default,
+  over black) or RGBA. [C] Plain JS ESM + JSDoc, `node:test`, Node `>=24`,
+  `@toptensoftware/button-face`, public repo, MIT.
+- [R] Core exports a curated named list; Node entry adds `render` with
+  defaults, `resolveSvg`, `createNodeSvgResolver`, `createFileResolver`,
+  `napiBackend`. No PNG helper, no custom layer-type registration.
+- [R] Errors are strict: unknown layer type, unknown `src` prefix, unknown
+  `#name`, invalid colours/opacity/visible/align/lineSpacing/scale all
+  reject (old code often fell back silently).
+
+**Rendering**
+- [C] Canvas-2D backend with @napi-rs/canvas (Skia); sharp and node-canvas
+  dropped.
+- [R] Layers prepared concurrently, painted in order; `opacity`/`visible` on
+  all layers; `opacity: 0` skips the layer; hidden layers aren't validated.
+- [R] Only `parseColor` syntaxes are accepted anywhere (hex, rgb/rgba,
+  hsl/hsla, 148 names, `transparent`) - no `hwb()`/`lab()`/`oklch()`.
+- [R] SVG size rounding copies sharp (each dimension rounded half-up); a size
+  that rounds to 0 draws nothing.
+
+**Recolouring**
+- [C] Built-ins use `currentColor`, default svg `color` `#848484`; `colors`
+  A->B map for any SVG; `tint` opt-in.
+- [R] Colour map matches RGB + alpha at 8-bit precision; non-colour keys
+  throw; `url()`/`var()`/fallback values never match.
+- [R] The svg layer always writes the root `color` (default `#848484`), so it
+  overrides an author's own root `color`.
+- [R] Generator also turns every `color` paint in built-ins into `inherit`
+  (needed for 13 Inkscape icons).
+- [R] `$(x)` substitution is literal (no `$&` patterns) and substitutes `0`;
+  text is not XML-escaped (as before).
+
+**Text**
+- [C] Font scaled by Y only; old line-height heuristic kept (x1.1 small text).
+- [R] Property names `text, font, color, align, valign, lineSpacing, padding,
+  translate`; `lineSpacing: 0` rejects (old: treated as 1); fonts not
+  validated beyond having a px size.
+
+**Icons and tooling**
+- [C] Built-in icons are filled paths only (9 converted with Inkscape);
+  minimal README authoring note.
+- [R] 42 icons (not 45); Inkscape cruft kept; originals with `#848484` kept in
+  `icons/`, `src/icons.js` generated and checked in.
+- [R] `scripts/build-icon-reference.js` checked in though it needs the
+  sibling old repo; Skia quirk kept as a characterisation test.
+- [R] Tests use tolerances / ink regions, no golden images; visual check via
+  `npm run samples`.
+
 ### Investigate phase - all CONFIRMED by the user
 - Drop `states`/`state` (variant property sets) along with the `ButtonImage`
   class; the new API is a pure function `render(definition, width, height, opts)`.
@@ -1354,7 +1495,7 @@ ask the user to review.
   px, text alignment/valign/wrap grid, tint example. Not automatically
   verifiable - ask the user to review against the old project's output. A
   test only checks the script runs and produces files (into a temp dir).
-- [ ] 15. **Final review.** Re-read the Description and tick off every item
+- [x] 15. **Final review.** Re-read the Description and tick off every item
   (setup, version, copyright, licence, gitignore, engines, backend
   abstraction, layers, recolouring, `$(x)`, virtual pixels, text semantics,
   icons + generator + staleness test, `render` API, tests, README limited
@@ -1364,3 +1505,7 @@ ask the user to review.
   layout/`npm run build:icons` note) for the user. **[user]** Ask whether to
   commit and push the work. Set `Status: Complete`-ready and tell the
   coordinator the doc can be renamed to `complete-initial.md`.
+  *Done:* see Notes "Implement step 15". DRY fixes made, 592/592 pass,
+  `npm pack` contents checked; CLAUDE.md proposal and consolidated
+  assumptions recorded. Commit/push and the rename are left to the
+  coordinator.

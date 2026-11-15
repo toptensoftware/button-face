@@ -1,4 +1,4 @@
-// Plan step 14: the sample-render script for human review. Its output is
+// The sample-render script for human review. Its output is
 // checked by eye (scratch/samples/contact-sheet.png); this only proves the
 // script runs and writes PNGs.
 
@@ -9,6 +9,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { pkg } from "./helpers.js";
 
 const script = fileURLToPath(new URL("../scripts/render-samples.js", import.meta.url));
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -17,7 +18,6 @@ const isPng = file => PNG_SIGNATURE.every((b, i) => readFileSync(file)[i] == b);
 
 test("package.json has an npm 'samples' script", () =>
 {
-    let pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
     assert.equal(pkg.scripts.samples, "node scripts/render-samples.js");
 });
 

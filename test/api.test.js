@@ -1,23 +1,21 @@
-// Plan step 13: the public entry points. "." (src/index.js) is the portable,
+// The public entry points. "." (src/index.js) is the portable,
 // browser-safe core; "./node" (src/node.js) adds the @napi-rs/canvas backend
 // and a resolver with built-ins + file fallback as defaults.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as core from "@toptensoftware/button-face";
 import * as node from "@toptensoftware/button-face/node";
 import { render as coreRender } from "../src/render.js";
 import { napiBackend } from "../src/backends/napi.js";
 import { icons } from "../src/icons.js";
-import { pixelAt, pixels, importGraph, assertBrowserSafe } from "./helpers.js";
+import { pixelAt, pixels, importGraph, assertBrowserSafe, readFixture, pkg } from "./helpers.js";
 
-const fixture = new URL("fixtures/material-home.svg", import.meta.url);
-const fixturePath = fileURLToPath(fixture);
-const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+const fixturePath = fileURLToPath(new URL("fixtures/material-home.svg", import.meta.url));
+const fixtureSvg = readFixture("material-home.svg");
 
-// The example definition from the wip Notes (old project's typical usage).
+// A typical definition (the old project's usual icon + label layout).
 const example = {
     virtualSize: { width: 72, height: 72 },
     layers: [
@@ -102,7 +100,7 @@ test("node entry re-exports the core API plus Node extras", () =>
 test("node resolveSvg: built-ins via '#', anything else is a file path", async () =>
 {
     assert.equal(await node.resolveSvg("#heart"), icons.heart);
-    assert.equal(await node.resolveSvg(fixturePath), readFileSync(fixture, "utf8"));
+    assert.equal(await node.resolveSvg(fixturePath), fixtureSvg);
     await assert.rejects(node.resolveSvg("#nope"), /unknown built-in icon/);
     await assert.rejects(node.resolveSvg("no-such-file.svg"), { code: "ENOENT" });
 });
@@ -113,7 +111,7 @@ test("createNodeSvgResolver: baseDir and extra prefixes", async () =>
         baseDir: fileURLToPath(new URL("fixtures/", import.meta.url)),
         prefixes: { "@": name => `<svg id="${name}"/>` },
     });
-    assert.equal(await resolve("material-home.svg"), readFileSync(fixture, "utf8"));
+    assert.equal(await resolve("material-home.svg"), fixtureSvg);
     assert.equal(await resolve("@home"), `<svg id="home"/>`);
     assert.equal(await resolve("#heart"), icons.heart);
 });

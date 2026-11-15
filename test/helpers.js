@@ -4,6 +4,32 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { napiBackend } from "../src/backends/napi.js";
 
+// Source icon access (icons/*.svg), shared with the generator.
+export { ICON_KEY, listIcons, readIcon } from "../scripts/build-icons.js";
+
+/**
+ * Read a file (path relative to the repo root) as UTF-8 text.
+ * @param {string} relPath e.g. "package.json"
+ * @returns {string}
+ */
+export function readRepoFile(relPath)
+{
+    return readFileSync(new URL(`../${relPath}`, import.meta.url), "utf8");
+}
+
+/**
+ * Read a file from test/fixtures/ as UTF-8 text.
+ * @param {string} name e.g. "material-home.svg"
+ * @returns {string}
+ */
+export function readFixture(name)
+{
+    return readRepoFile(`test/fixtures/${name}`);
+}
+
+/** The parsed package.json. */
+export const pkg = JSON.parse(readRepoFile("package.json"));
+
 /**
  * Assert a source file (path relative to the repo root) has no Node-only or
  * native imports (`node:*`, `fs`, `path`, `@napi-rs/*`), i.e. is browser-safe.
@@ -11,7 +37,7 @@ import { napiBackend } from "../src/backends/napi.js";
  */
 export function assertBrowserSafe(relPath)
 {
-    let source = readFileSync(new URL(`../${relPath}`, import.meta.url), "utf8");
+    let source = readRepoFile(relPath);
     assert.doesNotMatch(source, /from\s+["'](node:|fs["']|path["']|@napi-rs)/, `${relPath} is not browser-safe`);
 }
 
@@ -32,7 +58,7 @@ export function importGraph(relPath)
         if (files.includes(file))
             continue;
         files.push(file);
-        let source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+        let source = readRepoFile(file);
         for (let [, fromSpec, bareSpec] of source.matchAll(/^\s*(?:import|export)\b[^;'"]*?\bfrom\s+["']([^"']+)["']|^\s*import\s+["']([^"']+)["']/gm))
         {
             let spec = fromSpec ?? bareSpec;
@@ -90,6 +116,14 @@ export function* pixels(result)
         for (let x = 0; x < result.width; x++)
             yield [x, y, pixelAt(result, x, y)];
     }
+}
+
+/**
+ * Every fully opaque pixel as `{ r, g, b, a }`.
+ */
+export function opaquePixels(result)
+{
+    return [...pixels(result)].map(([, , p]) => p).filter(p => p.a == 255);
 }
 
 /**

@@ -17,7 +17,27 @@ const iconsDir = new URL("icons/", root);
 const outFile = new URL("src/icons.js", root);
 
 /** The recolour key in icons/*.svg (and the old default icon colour). */
-const KEY = "#848484";
+export const ICON_KEY = "#848484";
+
+/**
+ * Names of the source icons (icons/*.svg without the extension), sorted.
+ * @returns {string[]}
+ */
+export function listIcons()
+{
+    return readdirSync(iconsDir).filter(f => f.endsWith(".svg")).map(f => f.slice(0, -4)).sort();
+}
+
+/**
+ * Read a source icon, LF-normalised (git stores LF, but an old checkout may
+ * be CRLF).
+ * @param {string} name
+ * @returns {string}
+ */
+export function readIcon(name)
+{
+    return readFileSync(new URL(`${name}.svg`, iconsDir), "utf8").replace(/\r\n?/g, "\n");
+}
 
 /**
  * Convert one source icon to the `currentColor` convention:
@@ -34,7 +54,7 @@ function toCurrentColor(name, svg)
 {
     if (findPaintValues(svg).some(p => p.value.toLowerCase() == "currentcolor"))
         throw new Error(`icons/${name}.svg already uses currentColor - its color values would not be inert`);
-    svg = applyColorMap(svg, { [KEY]: "currentColor" });
+    svg = applyColorMap(svg, { [ICON_KEY]: "currentColor" });
     return mapPaintValues(svg, ({ name }) => name == "color" ? "inherit" : undefined);
 }
 
@@ -45,12 +65,8 @@ function toCurrentColor(name, svg)
  */
 export function generateIconsModule()
 {
-    let names = readdirSync(iconsDir).filter(f => f.endsWith(".svg")).map(f => f.slice(0, -4)).sort();
-    let entries = names.map(name =>
-    {
-        let svg = readFileSync(new URL(`${name}.svg`, iconsDir), "utf8").replace(/\r\n?/g, "\n");
-        return `    ${JSON.stringify(name)}: ${JSON.stringify(toCurrentColor(name, svg))},\n`;
-    });
+    let entries = listIcons().map(name =>
+        `    ${JSON.stringify(name)}: ${JSON.stringify(toCurrentColor(name, readIcon(name)))},\n`);
     return "// GENERATED - do not edit. Built from icons/*.svg by scripts/build-icons.js\n" +
         "// (run `npm run build:icons`).\n" +
         "\n" +

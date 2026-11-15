@@ -1,4 +1,4 @@
-// Plan step 10: the render core (src/render.js) - output format, layer
+// The render core (src/render.js) - output format, layer
 // dispatch and the shared per-layer handling (visible, opacity). Uses fill
 // layers as the simplest real layer type.
 

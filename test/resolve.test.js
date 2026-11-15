@@ -1,4 +1,4 @@
-// Plan step 9: async, prefix-keyed SVG source resolver (src/resolve.js) and
+// Async, prefix-keyed SVG source resolver (src/resolve.js) and
 // the Node-only file resolver (src/node/fileResolver.js).
 
 import { test } from "node:test";
@@ -10,11 +10,11 @@ import { fileURLToPath } from "node:url";
 import { createSvgResolver, resolveBuiltinIcon } from "../src/resolve.js";
 import { createFileResolver } from "../src/node/fileResolver.js";
 import { icons } from "../src/icons.js";
-import { assertBrowserSafe } from "./helpers.js";
+import { assertBrowserSafe, readFixture } from "./helpers.js";
 
 const root = new URL("../", import.meta.url);
 const fixturesDir = fileURLToPath(new URL("test/fixtures/", root));
-const materialHome = readFileSync(join(fixturesDir, "material-home.svg"), "utf8");
+const materialHome = readFixture("material-home.svg");
 const SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>`;
 
 // ---- Built-in icons ('#') --------------------------------------------------

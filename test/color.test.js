@@ -1,4 +1,4 @@
-// Plan step 4: CSS colour parsing / normalisation (src/color.js).
+// CSS colour parsing / normalisation (src/color.js).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";

@@ -1,30 +1,16 @@
-// Plan step 3 spike: verify Skia (@napi-rs/canvas) renders the built-in icons
-// and the SVG features the renderer relies on. These become icon render tests
-// later (merged/renamed in steps 10-12).
+// SVG features the renderer relies on, checked directly against the Node
+// backend's SVG decoding (Skia via @napi-rs/canvas): every source icon
+// decodes, viewBox maths (negative / padded origins), gradients. Recolouring
+// through the svg layer is tested in layers-svg.test.js; the unitless
+// stroke-width quirk in backend.test.js.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
-import { drawSvg, pixels, findInkBounds, expectColorNear } from "./helpers.js";
+import { drawSvg, opaquePixels, findInkBounds, expectColorNear, listIcons, readIcon, readFixture } from "./helpers.js";
 
-const root = new URL("../", import.meta.url);
-const iconsDir = new URL("icons/", root);
-const iconNames = readdirSync(iconsDir).filter(f => f.endsWith(".svg")).map(f => f.slice(0, -4)).sort();
-const readIcon = name => readFileSync(new URL(`${name}.svg`, iconsDir), "utf8");
-const materialHome = readFileSync(new URL("test/fixtures/material-home.svg", root), "utf8");
+const materialHome = readFixture("material-home.svg");
 
-// Opaque pixels only
-const opaquePixels = result => [...pixels(result)].map(([, , p]) => p).filter(p => p.a == 255);
-
-test("all built-in icons are present", () =>
-{
-    // The old project has 42 icons (the plan's "45" was a miscount).
-    assert.equal(iconNames.length, 42);
-    for (let name of ["add", "hdd", "steam", "apple-tv", "square", "circle", "volume-up"])
-        assert.ok(iconNames.includes(name), name);
-});
-
-for (let name of iconNames)
+for (let name of listIcons())
 {
     test(`icon ${name} decodes and draws ink at 72x72`, async () =>
     {
@@ -32,10 +18,6 @@ for (let name of iconNames)
         assert.ok(findInkBounds(result), `${name} has no visible pixels`);
     });
 }
-
-// The #square/#circle colour, currentColor / inherited root fill and
-// material-icon-recolour spike tests moved to layers-svg.test.js (step 11),
-// where they run through the svg layer.
 
 test("material icon without fill renders black (implicit default)", async () =>
 {
@@ -97,6 +79,3 @@ test("icon apple-tv is uniform #848484 (style fill overrides its gradient fill a
     let result = await drawSvg(readIcon("apple-tv"), 72, 72);
     assert.deepEqual([...distinctColours(result)], ["132,132,132"]);
 });
-
-// The Skia unitless stroke-width quirk test moved to backend.test.js (step 8).
-// "hdd keeps its red" moved to layers-svg.test.js (step 11).
