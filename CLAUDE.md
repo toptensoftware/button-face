@@ -107,11 +107,20 @@ the way (relevant files, APIs, gotchas, decisions made).
   painter. The core handles `visible`/`opacity`. Shared validation:
   `src/layers/validate.js`.
 - Shared code - reuse, don't duplicate: `color.js` (CSS colours),
-  `recolor.js` (the one SVG markup/paint tokeniser), `scale.js` (all
+  `recolor.js` (the one SVG markup/paint tokeniser; `lookupColor` for map
+  lookups), `scale.js` (all
   virtual -> device px maths), `svgSize.js`; tests use `test/helpers.js`.
 - SVG references go through async prefix resolvers (`src/resolve.js`).
   Resolvers return SVG strings; monochrome sources normalise their
   foreground to `currentColor`.
+- svg layer recolouring is uniform: `currentColor` counts as the effective
+  `color` (default `#848484`), so a `colors` key matching it also recolours
+  `currentColor` - built-ins and file/inline SVGs recolour with the same map.
+- `src/legacy.js` `convertLegacyDefinition(old)` maps old node-buttonImage
+  options (or a `ButtonImage` instance) to a layered definition - pure,
+  browser-safe, no validation (render validates); `states`/`state` not
+  supported. `svgForeColor` becomes `colors: { "#848484": c }` for every
+  source.
 
 
 

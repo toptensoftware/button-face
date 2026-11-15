@@ -8,7 +8,7 @@ import { render } from "../src/render.js";
 import { napiBackend } from "../src/backends/napi.js";
 import { createSvgResolver } from "../src/resolve.js";
 import { setRootAttribute } from "../src/recolor.js";
-import { pixelAt, opaquePixels, findInkBounds, expectColorNear, expectAllPixels, readFixture } from "./helpers.js";
+import { pixelAt, opaquePixels, findInkBounds, outlinePixel, expectColorNear, expectAllPixels, readFixture } from "./helpers.js";
 
 const opts = { backend: napiBackend, resolveSvg: createSvgResolver(), channels: 4 };
 const draw = (layer, w = 72, h = 72, extra = {}) =>
@@ -25,22 +25,6 @@ const box = (w, h, fill = "#848484") =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="${fill}"/></svg>`;
 
 
-// The most opaque pixel on the left half of the middle row (the #square /
-// #circle icons are ~2.6px outlines, so no pixel may be fully covered).
-function outlinePixel(result)
-{
-    let y = result.height >> 1;
-    let best = pixelAt(result, 0, y);
-    for (let x = 1; x < result.width >> 1; x++)
-    {
-        let p = pixelAt(result, x, y);
-        if (p.a > best.a)
-            best = p;
-    }
-    assert.ok(best.a >= 200, `outline too faint on the middle row (alpha ${best.a})`);
-    return best;
-}
-
 // ---- colour ----------------------------------------------------------------
 
 for (let src of ["#square", "#circle"])
@@ -54,7 +38,48 @@ for (let src of ["#square", "#circle"])
     {
         expectColorNear(outlinePixel(await draw({ src, color: "red" })), RED, 2);
     });
+
+    // Uniform recolouring: currentColor counts as the effective `color`
+    // (default #848484) for the colour map, so built-ins recolour with the
+    // same map as file/inline SVGs.
+    test(`${src} with colors: { "#848484": "red" } renders red`, async () =>
+    {
+        expectColorNear(outlinePixel(await draw({ src, colors: { "#848484": "red" } })), RED, 2);
+    });
+
+    test(`${src} with colors keyed by another spelling of #848484 renders red`, async () =>
+    {
+        expectColorNear(outlinePixel(await draw({ src, colors: { "rgb(132, 132, 132)": "red" } })), RED, 2);
+    });
+
+    test(`${src} with colors keyed by an explicit color is remapped`, async () =>
+    {
+        expectColorNear(outlinePixel(await draw({ src, color: "red", colors: { red: "blue" } })), BLUE, 2);
+    });
+
+    test(`${src} with colors keyed by #848484 but color: "red" stays red`, async () =>
+    {
+        expectColorNear(outlinePixel(await draw({ src, color: "red", colors: { "#848484": "blue" } })), RED, 2);
+    });
+
+    test(`${src} with colors not matching color stays grey`, async () =>
+    {
+        expectColorNear(outlinePixel(await draw({ src, colors: { red: "blue", "#000": "lime" } })), GREY, 2);
+    });
 }
+
+test("colors value that isn't a colour leaves the root colour unchanged", async () =>
+{
+    // applyColorMap writes fill="currentColor"; root colour stays #848484.
+    let result = await draw({ svg: box(10, 10), colors: { "#848484": "currentColor" } });
+    expectAllPixels(result, { ...GREY, a: 255 }, 0);
+});
+
+test("colors matching color recolours both explicit paints and currentColor", async () =>
+{
+    let svg = box(10, 10).replace("<rect", `<rect fill="currentColor" width="5" height="10"/><rect x="5"`);
+    expectAllPixels(await draw({ svg, colors: { "#848484": "lime" } }), { ...LIME, a: 255 }, 0);
+});
 
 test("color accepts any parseColor syntax", async () =>
 {
@@ -288,7 +313,7 @@ test("svg layer honours opacity (core) and RGB output", async () =>
 
 test("the layer object is not modified", async () =>
 {
-    let layer = { type: "svg", src: "#heart", color: "red", colors: { "#000": "red" }, translate: { x: 1, y: 2 }, text: "x" };
+    let layer = { type: "svg", src: "#heart", color: "red", colors: { "#000": "red", red: "blue" }, translate: { x: 1, y: 2 }, text: "x" };
     let copy = structuredClone(layer);
     await render({ layers: [layer] }, 16, 16, opts);
     assert.deepEqual(layer, copy);

@@ -1,5 +1,5 @@
 // Text layer: word-wrapped, aligned text (the old text, font, textColor,
-// textPadding, textAlign, textVerticalAlign, textLineSpacing and
+// textPadding, textAlign, textVAlign, textLineSpacing and
 // textTranslate options; old drawText.js).
 //   {
 //     type: "text",

@@ -8,9 +8,10 @@ export { createSvgResolver, resolveBuiltinIcon } from "./resolve.js";
 export { icons } from "./icons.js";
 export { parseColor, colorsEqual, formatColor, namedColors } from "./color.js";
 export {
-    applyColorMap, mapPaintValues, findPaintValues, getRootAttribute,
+    applyColorMap, lookupColor, mapPaintValues, findPaintValues, getRootAttribute,
     setRootAttribute, setRootColor, substituteText, normalizeStyleLengths,
 } from "./recolor.js";
 export { getSvgSize, padViewBox, parseViewBox, parseLength } from "./svgSize.js";
 export { createScaler, scaleFont, DEFAULT_VIRTUAL_SIZE } from "./scale.js";
 export { wrapLines } from "./wrapLines.js";
+export { convertLegacyDefinition } from "./legacy.js";

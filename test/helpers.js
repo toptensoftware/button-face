@@ -155,6 +155,25 @@ export function findInkBounds(result, background, threshold = 32)
 }
 
 /**
+ * The most opaque pixel on the left half of the middle row, for icons drawn
+ * as thin outlines (e.g. `#square` / `#circle`, ~2.6px, so no pixel may be
+ * fully covered) on a transparent background. Asserts it is reasonably opaque.
+ */
+export function outlinePixel(result)
+{
+    let y = result.height >> 1;
+    let best = pixelAt(result, 0, y);
+    for (let x = 1; x < result.width >> 1; x++)
+    {
+        let p = pixelAt(result, x, y);
+        if (p.a > best.a)
+            best = p;
+    }
+    assert.ok(best.a >= 200, `outline too faint on the middle row (alpha ${best.a})`);
+    return best;
+}
+
+/**
  * Summary of a rendered image for loose comparisons between renderers:
  * `coverage` = sum of alpha / 255 (pixel-equivalents of ink), `bounds` =
  * `findInkBounds(result)`, `color` = coverage-weighted mean RGB (rounded), or

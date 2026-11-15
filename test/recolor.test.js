@@ -4,7 +4,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
-    applyColorMap, findPaintValues, mapPaintValues, normalizeStyleLengths,
+    applyColorMap, lookupColor, findPaintValues, mapPaintValues, normalizeStyleLengths,
     setRootAttribute, setRootColor, substituteText, getRootAttribute,
 } from "../src/recolor.js";
 import { listIcons, readIcon, readFixture } from "./helpers.js";
@@ -158,6 +158,50 @@ describe("applyColorMap", () =>
         assert.equal(applyColorMap(svg, {}), svg);
         assert.equal(applyColorMap(svg, null), svg);
         assert.equal(applyColorMap(svg), svg);
+    });
+});
+
+describe("lookupColor", () =>
+{
+    test("returns the value of the entry whose key matches after normalisation", () =>
+    {
+        for (let spelling of ["#848484", "#848484ff", "rgb(132, 132, 132)", "RGB(132,132,132)"])
+            assert.equal(lookupColor({ "#848484": "red" }, spelling), "red", spelling);
+        assert.equal(lookupColor({ red: "blue" }, "#ff0000"), "blue");
+        assert.equal(lookupColor({ "rgb(255,0,0)": "blue" }, "red"), "blue");
+    });
+
+    test("accepts a Map", () =>
+    {
+        assert.equal(lookupColor(new Map([["red", "blue"]]), "#f00"), "blue");
+    });
+
+    test("first matching entry wins; values returned as strings, unparsed", () =>
+    {
+        assert.equal(lookupColor({ red: "blue", "#f00": "lime" }, "red"), "blue");
+        assert.equal(lookupColor({ "#848484": "currentColor" }, "#848484"), "currentColor");
+    });
+
+    test("alpha must match", () =>
+    {
+        assert.equal(lookupColor({ "#848484": "red" }, "rgba(132,132,132,0.5)"), undefined);
+    });
+
+    test("no match, null/empty map or unparseable value -> undefined", () =>
+    {
+        assert.equal(lookupColor({ red: "blue" }, "lime"), undefined);
+        assert.equal(lookupColor(null, "red"), undefined);
+        assert.equal(lookupColor(undefined, "red"), undefined);
+        assert.equal(lookupColor({}, "red"), undefined);
+        assert.equal(lookupColor(new Map(), "red"), undefined);
+        assert.equal(lookupColor({ red: "blue" }, "currentColor"), undefined);
+        assert.equal(lookupColor({ red: "blue" }, "not-a-colour"), undefined);
+    });
+
+    test("keys that aren't colours throw TypeError (like applyColorMap)", () =>
+    {
+        assert.throws(() => lookupColor({ none: "red" }, "red"), { name: "TypeError", message: /not a colour/ });
+        assert.throws(() => lookupColor({ currentColor: "red" }, "red"), { name: "TypeError", message: /not a colour/ });
     });
 });
 

@@ -1,5 +1,5 @@
 // The text layer (src/layers/text.js) - the old project's
-// text, font, textColor, textPadding, textAlign, textVerticalAlign,
+// text, font, textColor, textPadding, textAlign, textVAlign,
 // textLineSpacing and textTranslate (old drawText.js).
 //
 // Fonts differ per machine, so render tests check ink bounds / alignment with

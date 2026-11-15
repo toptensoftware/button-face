@@ -12,13 +12,21 @@
 //     translate?: { x, y },      // offset from centre, virtual px
 //   }
 //
+// Recolouring is uniform: `currentColor` counts as the effective `color` for
+// the colour map. If a `colors` key matches `color` (normalised, first match
+// wins) and its value is a colour, the root colour becomes that value. So
+// `colors: { "#848484": c }` recolours built-ins (whose grey is already
+// `currentColor`) exactly like file/inline SVGs that paint `#848484`, and
+// `{ color: "red", colors: { red: "blue" } }` draws `currentColor` blue.
+//
 // Pipeline: resolve -> substituteText -> applyColorMap -> setRootColor ->
 // getSvgSize (aspect only) -> loadSvgImage -> position -> draw (tint via an
 // offscreen canvas + `source-in`). Sizes and positions round like the old
 // sharp-based renderer; anything outside the button is clipped by the canvas.
 
 import { validColor, validatePositive, validateTranslate } from "./validate.js";
-import { applyColorMap, setRootColor, substituteText } from "../recolor.js";
+import { applyColorMap, lookupColor, setRootColor, substituteText } from "../recolor.js";
+import { parseColor, formatColor } from "../color.js";
 import { getSvgSize } from "../svgSize.js";
 
 /** Default `color` - the grey the built-in icons were drawn in. */
@@ -36,7 +44,7 @@ export async function svgLayer(layer, { width, height, scaler, backend, resolveS
     let svg = await loadSource(layer, resolveSvg);
     svg = substituteText(svg, text);
     svg = applyColorMap(svg, colors);
-    svg = setRootColor(svg, colorValue);
+    svg = setRootColor(svg, rootColor(colors, colorValue));
 
     // Height = button height x scale; width keeps the SVG's aspect ratio.
     // Each dimension is rounded, as sharp did when rasterising.
@@ -57,6 +65,15 @@ export async function svgLayer(layer, { width, height, scaler, backend, resolveS
         image = tintImage(backend, image, svgW, svgH, tintValue);
 
     return ctx => ctx.drawImage(image, left, top, svgW, svgH);
+}
+
+// The root colour (what `currentColor` resolves to): `color`, or the colour
+// map's value for it if a key matches and that value is a colour (so
+// e.g. `{ "#848484": "currentColor" }` leaves it unchanged).
+function rootColor(colors, color)
+{
+    let mapped = parseColor(lookupColor(colors, color));
+    return mapped ? formatColor(mapped) : color;
 }
 
 // The layer's SVG markup: inline `svg`, or `src` through the resolver.

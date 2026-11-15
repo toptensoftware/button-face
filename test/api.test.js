@@ -37,10 +37,10 @@ test("package.json exports '.' -> src/index.js and './node' -> src/node.js", () 
 test("core entry exports the portable API", () =>
 {
     for (let name of ["render", "layerTypes", "createSvgResolver", "resolveBuiltinIcon",
-        "parseColor", "colorsEqual", "formatColor", "applyColorMap", "mapPaintValues",
+        "parseColor", "colorsEqual", "formatColor", "applyColorMap", "lookupColor", "mapPaintValues",
         "findPaintValues", "getRootAttribute", "setRootAttribute", "substituteText",
         "normalizeStyleLengths", "getSvgSize", "padViewBox", "createScaler", "scaleFont",
-        "DEFAULT_VIRTUAL_SIZE", "wrapLines"])
+        "DEFAULT_VIRTUAL_SIZE", "wrapLines", "convertLegacyDefinition"])
     {
         assert.ok(name in core, `core is missing '${name}'`);
     }

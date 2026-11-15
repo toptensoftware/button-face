@@ -140,22 +140,44 @@ export function mapPaintValues(svg, fn)
  */
 export function applyColorMap(svg, map)
 {
+    let lookup = colorMapLookup(map, "applyColorMap");
+    return lookup ? mapPaintValues(svg, ({ value }) => lookup(value)) : svg;
+}
+
+/**
+ * Look up one colour in a colour map (same matching as `applyColorMap`):
+ * the value of the first entry whose key equals `value` after normalisation.
+ * @param {Record<string, string>|Map<string, string>|null} [map] - from colour -> to value
+ * @param {string} value - colour to look up
+ * @returns {string|undefined} undefined when nothing matches or `value` isn't a colour
+ * @throws {TypeError} if a map key isn't a colour
+ */
+export function lookupColor(map, value)
+{
+    return colorMapLookup(map, "lookupColor")?.(value);
+}
+
+// Parse a colour map once and return a `value -> mapped value | undefined`
+// function, or null for a missing/empty map. Shared by applyColorMap and
+// lookupColor so both match colours identically.
+function colorMapLookup(map, caller)
+{
     if (!map)
-        return svg;
+        return null;
     let entries = (map instanceof Map ? [...map] : Object.entries(map)).map(([from, to]) =>
     {
         let color = parseColor(from);
         if (!color)
-            throw new TypeError(`applyColorMap: "${from}" is not a colour`);
+            throw new TypeError(`${caller}: "${from}" is not a colour`);
         return [color, String(to)];
     });
     if (entries.length == 0)
-        return svg;
-    return mapPaintValues(svg, ({ value }) =>
+        return null;
+    return value =>
     {
         let color = parseColor(value);
         return color ? entries.find(([from]) => colorsEqual(from, color))?.[1] : undefined;
-    });
+    };
 }
 
 const XML_ESCAPES = { "&": "&amp;", "<": "&lt;", '"': "&quot;", "'": "&apos;" };
