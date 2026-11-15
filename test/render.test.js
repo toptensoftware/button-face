@@ -135,6 +135,18 @@ test("definition must be an object and layers an array", async () =>
         await assert.rejects(render(definition, 4, 4, opts), TypeError, JSON.stringify(definition));
 });
 
+test("an old node-buttonImage definition rejects with a hint to convert it", async () =>
+{
+    for (let [definition, key] of [[{ backColor: "red" }, "backColor"], [{ svgFile: "#play", text: "Hi" }, "svgFile"]])
+        await assert.rejects(render(definition, 4, 4, opts), {
+            name: "TypeError",
+            message: `render: definition looks like a node-buttonImage definition (has '${key}') - convert it with convertLegacyDefinition()`,
+        });
+    // a definition with layers is never treated as legacy
+    let { data } = await render({ layers: [red], backColor: "blue" }, 1, 1, opts);
+    assert.deepEqual([...data], [255, 0, 0]);
+});
+
 test("width and height must be positive integers", async () =>
 {
     for (let [w, h] of [[0, 4], [4, 0], [-1, 4], [4.5, 4], [4, NaN], ["4", 4]])

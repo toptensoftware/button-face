@@ -14,6 +14,7 @@ import { createScaler } from "./scale.js";
 import { fillLayer } from "./layers/fill.js";
 import { svgLayer } from "./layers/svg.js";
 import { textLayer } from "./layers/text.js";
+import { findLegacyKey } from "./legacy.js";
 
 /**
  * @typedef {import("./backend.js").Backend} Backend
@@ -78,6 +79,9 @@ export async function render(definition, width, height, { backend, resolveSvg, c
         throw new TypeError("render: options.backend must implement createCanvas and loadSvgImage");
     if (definition === null || typeof definition != "object")
         throw new TypeError("render: definition must be an object");
+    let legacyKey = findLegacyKey(definition);
+    if (legacyKey)
+        throw new TypeError(`render: definition looks like a node-buttonImage definition (has '${legacyKey}') - convert it with convertLegacyDefinition()`);
     let layers = definition.layers ?? [];
     if (!Array.isArray(layers))
         throw new TypeError("render: definition.layers must be an array");

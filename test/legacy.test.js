@@ -2,11 +2,32 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { convertLegacyDefinition as convert } from "../src/legacy.js";
+import { convertLegacyDefinition as convert, findLegacyKey } from "../src/legacy.js";
 
 const BLACK = { type: "fill", color: "black" };
 
 // ---- input / skeleton ------------------------------------------------------
+
+test("a definition with a 'layers' key is returned unchanged (same object)", () =>
+{
+    for (let def of [{ layers: [] }, { layers: [{ type: "fill", color: "red" }], virtualSize: { width: 10, height: 10 } },
+        { layers: undefined }, { layers: [], backColor: "red", text: "x" }])
+        assert.equal(convert(def), def);
+});
+
+test("findLegacyKey: first old-format key of a layer-less definition, else undefined", () =>
+{
+    assert.equal(findLegacyKey({ backColor: "red" }), "backColor");
+    assert.equal(findLegacyKey({ virtualSize: { width: 1, height: 1 }, svgFile: "#play" }), "svgFile");
+    assert.equal(findLegacyKey({ text: "" }), "text");
+    assert.equal(findLegacyKey({ states: {} }), "states");
+    // instances: getters on the prototype count
+    class Old { get svgCode() { return null; } }
+    assert.equal(findLegacyKey(new Old()), "svgCode");
+    // not legacy
+    for (let def of [{}, { virtualSize: { width: 1, height: 1 } }, { layers: [], backColor: "red" }, { whatever: 1 }])
+        assert.equal(findLegacyKey(def), undefined, JSON.stringify(def));
+});
 
 test("non-object input throws TypeError", () =>
 {

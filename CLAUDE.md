@@ -141,7 +141,10 @@ the way (relevant files, APIs, gotchas, decisions made).
   options (or a `ButtonImage` instance) to a layered definition - pure,
   browser-safe, no validation (render validates); `states`/`state` not
   supported. `svgForeColor` becomes `colors: { "#848484": c }` for every
-  source.
+  source. Returns input with a `layers` key unchanged; `render` rejects
+  layer-less definitions with old keys (`findLegacyKey`).
+- `README.md` is the user guide (usage + reference tables). Update it
+  whenever public options, exports, defaults or error messages change.
 
 
 

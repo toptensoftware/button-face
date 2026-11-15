@@ -20,18 +20,47 @@
 // behaviour. Properties are read by name (not Object.keys) so instances with
 // getters / private fields convert too. Ignored: channels (a render option),
 // state/states (not supported), onInvalidate and unknown keys.
+//
+// A definition that already has a `layers` key is returned unchanged, so
+// callers can pass old and new definitions through it alike.
 
 /** The old recolour key (built-in icons' grey), replaced by svgForeColor. */
 const GREY = "#848484";
 
 /**
- * @param {object} old - old ButtonImage options (or instance)
+ * Keys only an old definition has (virtualSize is shared, so not listed).
+ * Used by render() to reject unconverted old definitions.
+ */
+const LEGACY_KEYS = Object.freeze([
+    "backColor", "svgFile", "svgCode", "svgText", "svgForeColor", "svgScale", "svgTranslate",
+    "text", "textColor", "textAlign", "textVAlign", "font", "textLineSpacing", "textPadding",
+    "textTranslate", "states", "state",
+]);
+
+/**
+ * The first old node-buttonImage key of a definition without `layers`
+ * (`in`, so instance getters count), or undefined if it isn't an old one.
+ * @param {object} definition
+ * @returns {string | undefined}
+ */
+export function findLegacyKey(definition)
+{
+    if ("layers" in definition)
+        return undefined;
+    return LEGACY_KEYS.find(key => key in definition);
+}
+
+/**
+ * @param {object} old - old ButtonImage options (or instance), or a layered
+ *   definition (anything with a `layers` key), which is returned as-is
  * @returns {import("./render.js").Definition}
  */
 export function convertLegacyDefinition(old)
 {
     if (old === null || typeof old != "object" || Array.isArray(old))
         throw new TypeError("convertLegacyDefinition: expected an options object");
+    if ("layers" in old)
+        return old;
 
     /** @type {any} */
     let def = {};
