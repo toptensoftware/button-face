@@ -6,7 +6,7 @@
    fill="#848484"
    version="1.1"
    id="svg1"
-   sodipodi:docname="cmd_hdd.svg"
+   sodipodi:docname="hdd.svg"
    inkscape:version="1.4 (86a8ad7, 2024-10-11)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -32,21 +32,13 @@
      inkscape:window-y="-6"
      inkscape:window-maximized="1"
      inkscape:current-layer="svg1" />
-  <circle
-     style="fill:#ff0000;stroke:none;stroke-width:38.532;stroke-linecap:round;stroke-dasharray:none"
+  <path
      id="path1"
-     cx="478.82434"
-     cy="-644.78314"
-     r="126.65348" />
-  <text
-     xml:space="preserve"
-     style="font-stretch:condensed;font-size:315.295px;font-family:Impact;-inkscape-font-specification:'Impact Condensed';text-align:start;writing-mode:lr-tb;direction:ltr;text-anchor:start;fill:#848484;fill-opacity:1;stroke:none;stroke-width:137.332;stroke-linecap:round"
-     x="217.3568"
-     y="-188.56335"
-     id="text1"><tspan
-       sodipodi:role="line"
-       id="tspan1"
-       style="fill:#848484;fill-opacity:1;stroke-width:137.332"
-       x="217.3568"
-       y="-188.56335">HDD</tspan></text>
+     style="fill:#ff0000;stroke-width:38.532;stroke-linecap:round"
+     d="M 605.47782,-644.78314 A 126.65348,126.65348 0 0 1 478.82434,-518.12966 126.65348,126.65348 0 0 1 352.17086,-644.78314 126.65348,126.65348 0 0 1 478.82434,-771.43662 126.65348,126.65348 0 0 1 605.47782,-644.78314 Z" />
+  <path
+     d="m 379.31498,-437.81268 v 249.24933 h -64.81407 v -104.6878 h -19.39803 v 104.6878 h -64.81406 v -249.24933 h 64.81406 v 89.13858 h 19.39803 v -89.13858 z m 26.018,0 h 48.49508 q 46.95556,0 63.42849,4.31067 16.62688,4.31067 25.24823,14.16364 8.62135,9.85297 10.77669,22.01523 2.15533,12.00831 2.15533,47.41742 v 87.29114 q 0,33.56168 -3.233,44.95418 -3.07905,11.23854 -10.93064,17.70455 -7.85158,6.31206 -19.39803,8.92925 -11.54645,2.46325 -34.7933,2.46325 h -81.74885 z m 64.81406,42.64488 v 163.95956 q 14.00969,0 17.2427,-5.54229 3.233,-5.69625 3.233,-30.63658 v -96.83621 q 0,-16.93479 -1.07767,-21.70732 -1.07767,-4.77254 -4.92648,-6.92787 -3.84882,-2.30929 -14.47155,-2.30929 z m 109.46032,-42.64488 h 48.49508 q 46.95556,0 63.42849,4.31067 16.62689,4.31067 25.24824,14.16364 8.62134,9.85297 10.77668,22.01523 2.15534,12.00831 2.15534,47.41742 v 87.29114 q 0,33.56168 -3.23301,44.95418 -3.07905,11.23854 -10.93064,17.70455 -7.85158,6.31206 -19.39803,8.92925 -11.54645,2.46325 -34.7933,2.46325 h -81.74885 z m 64.81406,42.64488 v 163.95956 q 14.00969,0 17.2427,-5.54229 3.23301,-5.69625 3.23301,-30.63658 v -96.83621 q 0,-16.93479 -1.07767,-21.70732 -1.07767,-4.77254 -4.92649,-6.92787 -3.84881,-2.30929 -14.47155,-2.30929 z"
+     id="text1"
+     style="font-stretch:condensed;font-size:315.295px;font-family:Impact;-inkscape-font-specification:'Impact Condensed';stroke-width:137.332;stroke-linecap:round"
+     aria-label="HDD" />
 </svg>

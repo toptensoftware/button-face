@@ -862,12 +862,17 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
     enforced statically (import-graph test). First real browser use should
     add a backend (`OffscreenCanvas` + `createImageBitmap`) and e.g. vitest
     browser mode.
-  - `hdd` icon uses the Impact font in `<text>` - renders differently where
-    Impact isn't installed (non-Windows, browsers without it).
+  - ~~`hdd` icon uses the Impact font~~ - fixed after review (user): the
+    "HDD" text was converted to a path with Inkscape, so no font is needed.
+    `scripts/strokes-to-paths.js` was generalised to `scripts/to-paths.js`
+    (object-to-path + stroke-to-path) and `test/icons.test.js` now also
+    fails on any `<text>`/`<tspan>`/`<textPath>` in a built-in icon. hdd
+    still matches the librsvg (Impact) reference.
   - No PNG helper in the public API (samples script encodes itself).
   - No `.d.ts`/`checkJs` - JSDoc only.
-  - `scripts/build-icon-reference.js` needs the sibling `../node-buttonImage`
-    (sharp + original images) to regenerate the reference fixture.
+  - ~~`scripts/build-icon-reference.js`~~ removed after review (user): the
+    reference fixture `test/fixtures/icon-reference.json` is fixed and won't
+    be regenerated, so the dependency on the old project is gone.
   - 5 icons are CRLF in this working tree only (git index is LF); harmless.
 - **Leftover grep:** no `sharp`/`canvas`(node-canvas) imports in `src/`
   (only provenance comments in `svg.js` and the reference script); only
@@ -928,8 +933,8 @@ Rule 4 proposals collected during the job, as one addition:
 - Sources are `icons/*.svg` (grey `#848484` is the recolour key). After
   adding/editing one, run `npm run build:icons` to regenerate `src/icons.js`
   (generated - never edit by hand; a test fails if it is stale).
-- Built-in icons must be **filled paths only - no strokes**. Convert with
-  `node scripts/strokes-to-paths.js icons/<name>.svg` (needs Inkscape).
+- Built-in icons must be **filled paths only - no strokes, no text**. Convert
+  with `node scripts/to-paths.js icons/<name>.svg` (needs Inkscape).
 - `npm run samples` renders PNGs + a contact sheet to `scratch/samples/` for
   visual review (rendering output can't be fully verified by tests).
 ```

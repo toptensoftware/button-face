@@ -13,8 +13,9 @@ import { generateIconsModule } from "../scripts/build-icons.js";
 const root = new URL("../", import.meta.url);
 const iconNames = listIcons();
 
-// librsvg (old project) render stats of the original icons at 72x72; see
-// scripts/build-icon-reference.js.
+// Fixed reference: render stats (ink coverage, bounds, average colour) of the
+// original icons at 72x72 as rendered by librsvg, captured once during the
+// port. Not regenerated.
 const reference = JSON.parse(readFixture("icon-reference.json"));
 const SIZE = 72;
 
@@ -23,14 +24,20 @@ const paintValues = (svg, name) => findPaintValues(svg).filter(p => p.name == na
 // ---- Sources ---------------------------------------------------------------
 
 // Built-in icons must be filled paths only: some renderers (e.g. Skia via
-// @napi-rs/canvas) mishandle strokes (unitless stroke-width in style), so
-// strokes are converted to paths with scripts/strokes-to-paths.js.
+// @napi-rs/canvas) mishandle strokes (unitless stroke-width in style), and
+// text depends on fonts installed on the machine. Convert both with
+// scripts/to-paths.js.
 for (let name of iconNames)
 {
     test(`icon ${name} paints no strokes`, () =>
     {
         let painted = paintValues(readIcon(name), "stroke").filter(v => v != "none");
-        assert.deepEqual(painted, [], `${name} has stroke paint - run scripts/strokes-to-paths.js`);
+        assert.deepEqual(painted, [], `${name} has stroke paint - run scripts/to-paths.js`);
+    });
+
+    test(`icon ${name} has no text elements`, () =>
+    {
+        assert.doesNotMatch(readIcon(name), /<(text|tspan|textPath)\b/, `${name} has text - run scripts/to-paths.js`);
     });
 }
 
