@@ -1,6 +1,6 @@
 # Initial Port
 
-Status: Implement - all steps done; ready for Complete (coordinator renames)
+Status: Complete
 
 ## Description
 
@@ -902,7 +902,7 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   tests, scripts, icons sources, scratch or wip.
 - `npm test`: 592 tests, 592 pass (591 - 1 duplicate + 2 package tests).
 
-### Proposed CLAUDE.md updates (pending user approval)
+### CLAUDE.md updates (approved by user and applied)
 Rule 4 proposals collected during the job, as one addition:
 
 ```markdown

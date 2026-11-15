@@ -89,6 +89,44 @@ the way (relevant files, APIs, gotchas, decisions made).
 
 
 
+## Architecture
+
+- Plain JavaScript ESM + JSDoc, no build step. Two entry points
+  (package.json `exports`): `src/index.js` = portable core, `src/node.js` =
+  core + Node defaults (`napiBackend`, file resolver, `render` with defaults).
+- **Browser-safe core:** nothing reachable from `src/index.js` may import
+  `node:*`, `fs`, `path` or `@napi-rs/*` (enforced by `test/api.test.js`).
+  Node-only code lives in `src/node.js`, `src/node/` and
+  `src/backends/napi.js` (the only importer of `@napi-rs/canvas`).
+- `render(definition, w, h, { backend, resolveSvg, channels })` paints layers
+  through a Canvas-2D backend (`createCanvas`, `loadSvgImage`) and returns
+  `{ data: Uint8Array, width, height, channels }`.
+- Layer types: one module per type in `src/layers/`, registered in
+  `layerTypes` (`src/render.js`). Signature `(layer, env) => Painter |
+  Promise<Painter>`: validate and do async work up front, return a sync
+  painter. The core handles `visible`/`opacity`. Shared validation:
+  `src/layers/validate.js`.
+- Shared code - reuse, don't duplicate: `color.js` (CSS colours),
+  `recolor.js` (the one SVG markup/paint tokeniser), `scale.js` (all
+  virtual -> device px maths), `svgSize.js`; tests use `test/helpers.js`.
+- SVG references go through async prefix resolvers (`src/resolve.js`).
+  Resolvers return SVG strings; monochrome sources normalise their
+  foreground to `currentColor`.
+
+
+
+## Built-in icons
+
+- Sources are `icons/*.svg` (grey `#848484` is the recolour key). After
+  adding/editing one, run `npm run build:icons` to regenerate `src/icons.js`
+  (generated - never edit by hand; a test fails if it is stale).
+- Built-in icons must be **filled paths only - no strokes, no text**. Convert
+  with `node scripts/to-paths.js icons/<name>.svg` (needs Inkscape).
+- `npm run samples` renders PNGs + a contact sheet to `scratch/samples/` for
+  visual review (rendering output can't be fully verified by tests).
+
+
+
 ## Building and testing
 
 - No build step (plain ESM JavaScript).
