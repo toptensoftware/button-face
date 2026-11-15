@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { drawSvg, inkStats } from "./helpers.js";
+import { applyColorMap, findPaintValues } from "../src/recolor.js";
 
 const root = new URL("../", import.meta.url);
 const iconsDir = new URL("icons/", root);
@@ -16,25 +17,8 @@ const readIcon = name => readFileSync(new URL(`${name}.svg`, iconsDir), "utf8");
 const reference = JSON.parse(readFileSync(new URL("test/fixtures/icon-reference.json", root), "utf8"));
 const SIZE = 72;
 
-/**
- * Every `stroke` paint value in an SVG: `stroke="..."` attributes and
- * `stroke: ...` declarations (style attributes / <style>). Ignores
- * `stroke-width` etc. and vendor properties such as `-inkscape-stroke`.
- */
-function strokeValues(svg)
-{
-    let values = [];
-    for (let m of svg.matchAll(/(?<![\w-])stroke\s*(?:=\s*(["'])(.*?)\1|:\s*([^;"'}<]*))/g))
-        values.push((m[2] ?? m[3]).trim());
-    return values;
-}
-
-test("strokeValues finds attribute and style strokes only", () =>
-{
-    let svg = `<path stroke="#848484" stroke-width="2" style="fill:red;stroke : none;-inkscape-stroke:hairline;stroke-width:3"/>`
-        + `<style>rect { stroke:blue }</style>`;
-    assert.deepEqual(strokeValues(svg), ["#848484", "none", "blue"]);
-});
+// Every `stroke` paint value (attributes, style attributes, <style>).
+const strokeValues = svg => findPaintValues(svg).filter(p => p.name == "stroke").map(p => p.value);
 
 // Built-in icons must be filled paths only: some renderers (e.g. Skia via
 // @napi-rs/canvas) mishandle strokes (unitless stroke-width in style), so
@@ -84,13 +68,12 @@ function expectColorClose(actual, expected, tolerance = 4)
 
 // Single-colour icons are entirely #848484, so swapping that key recolours all
 // of their ink (guards against stroke->path conversion losing the key colour).
-// Interim literal replace; step 5's applyColorMap supersedes it.
 const GREY = { r: 132, g: 132, b: 132 };
 for (let name of iconNames.filter(n => JSON.stringify(reference[n].color) == JSON.stringify(GREY)))
 {
     test(`icon ${name} recolours via #848484`, async () =>
     {
-        let svg = readIcon(name).replaceAll("#848484", "#ff0000");
+        let svg = applyColorMap(readIcon(name), { "#848484": "#ff0000" });
         expectColorClose(inkStats(await drawSvg(svg, SIZE, SIZE)).color, { r: 255, g: 0, b: 0 });
     });
 }

@@ -480,6 +480,57 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   `fillStyle`).
 - `npm test`: 202 tests, 202 pass.
 
+### Implement step 5 (recolor.js) - learnings
+- `src/recolor.js` exports `applyColorMap(svg, map)`, `findPaintValues(svg)`,
+  `setRootAttribute(svg, name, value)`, `setRootColor(svg, color)` (one-line
+  wrapper, kept for the step 11 pipeline), `substituteText(svg, text)`,
+  `normalizeStyleLengths(svg)`. Only import: `./color.js`.
+- **One tokeniser**: internal `rewriteValues(svg, visit)` - a markup regex
+  scanner (skips comments, CDATA, `<!...>`/`<?...?>`; captures whole
+  `<style>` elements, optionally prefixed e.g. `svg:style`; else start tags
+  with quoted attributes) that calls `visit({name, value, declaration})` for
+  every attribute value and every CSS declaration (`style="..."` and the
+  innermost `{...}` blocks of `<style>`, so `@media` nesting works). Values
+  are passed trimmed (surrounding whitespace and `!important` restored);
+  returning undefined leaves the original text byte-for-byte. `applyColorMap`,
+  `findPaintValues` and `normalizeStyleLengths` are thin visitors over it;
+  `setRootAttribute` reuses its `MARKUP`/`ATTR` regexes to find the root tag.
+- **Use `findPaintValues` for "does this SVG contain colour X in a paint
+  context"** (step 7's "no `#848484` in a paint context" check). Paint names:
+  `fill`, `stroke`, `stop-color`, `flood-color`, `lighting-color`, `color`;
+  attribute names matched case-sensitively, CSS property names lower-cased.
+- `applyColorMap`: map is a plain object or `Map`; keys parsed with
+  `parseColor` up front (a non-colour key such as `none`/`currentColor`
+  throws `TypeError`); values compared with `colorsEqual`; first matching
+  entry wins; replacements emitted as `String(to)` and not re-mapped (so
+  swaps `{red: blue, blue: red}` work). Null/empty map -> input returned.
+- `setRootAttribute`: root = first element start tag outside comments/PI/
+  DOCTYPE; throws if its local name isn't `svg`. Replaces the first
+  exact-name attribute keeping its quote style, else appends
+  ` name="value"` just before `>`/`/>` (after the last attribute, so
+  multi-line Inkscape tags keep their layout). Value is XML-escaped (`& <` and
+  the quote char).
+- `substituteText`: literal `replaceAll("$(x)", () => String(text))`.
+- `normalizeStyleLengths`: declarations only (presentation attributes are
+  fine in Skia), properties `stroke-width`, `stroke-dashoffset`,
+  `stroke-dasharray`, `font-size`; appends `px` to each unitless number token
+  separated by whitespace/commas (`2,1` -> `2px,1px`, `1e-1` -> `1e-1px`,
+  `calc(...)`, units, `%`, keywords untouched). On built-ins it rewrites
+  Inkscape's leftover `stroke-width:.489818` / `stroke-dashoffset:0`
+  declarations (harmless, nothing is stroked).
+- `src/color.js` now also exports `NUMBER` (CSS number regex source) so
+  recolor.js doesn't redefine it.
+- Real-icon tests (`test/recolor.test.js`): for all 42 icons an unmatched map
+  is identity, and `#848484 -> currentColor` leaves no `#848484` paint and
+  differs from the source only at those values (so step 7's generator is
+  safe on every icon); home (group style fill, `stop-color:#000` untouched),
+  add (root `fill` attr), steam (`url(#A)`, `xlink:href="#A"`, stop colours
+  survive), hdd (red kept).
+- `test/icons.test.js`: private `strokeValues` regex (and its test) replaced
+  by `findPaintValues`; the interim literal `#848484` replace replaced by
+  `applyColorMap`.
+- `npm test`: 326 tests, 326 pass (202 - 1 removed + 125 new).
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -649,6 +700,24 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
 - `formatColor` rounds alpha to 3 decimals; r/g/b are assumed to be integers
   0..255 (not clamped).
 
+### Implement step 5 - for user review
+- `substituteText` deviates from the old `svg.replace(/\$\(x\)/g, text)` in
+  two small ways: the text is inserted literally (old code interpreted `$&`,
+  `$1`, `$$` in the text as replace patterns), and the number `0` is
+  substituted (old code skipped any falsy text). Empty/missing text still
+  leaves `$(x)` in place, and the text is still not XML-escaped (as before).
+- `applyColorMap` throws on map keys that aren't colours (rather than
+  silently never matching) - surfaces typos early.
+- Paint values that aren't a single colour (`url(#a) red` fallbacks,
+  `var(...)`, `hwb()` etc.) are never matched. CSS comments inside `<style>`
+  or `style="..."` are not skipped (a commented-out declaration could be
+  rewritten - harmless). Unquoted attributes (not valid XML) are ignored.
+- Replacement colour strings are inserted into attributes unescaped (CSS
+  colours never contain quotes/`&`/`<`).
+- `normalizeStyleLengths` covers only the four listed properties (not
+  `letter-spacing`/`word-spacing`, untested in Skia).
+- `setRootColor` kept as a wrapper (step 11's pipeline names it).
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -707,7 +776,7 @@ ask the user to review.
   plus count), `transparent`; `null` for `none`, `currentColor`, `url(#x)`,
   garbage. `colorsEqual(a, b)`. `formatColor({r,g,b,a})` -> `#rrggbb` or
   `rgba()`. Pure, no deps.
-- [ ] 5. **Recolour + substitution (`src/recolor.js`).** Tests first
+- [x] 5. **Recolour + substitution (`src/recolor.js`).** Tests first
   (`test/recolor.test.js`, pure strings): one internal paint-context tokeniser
   (attributes `fill`, `stroke`, `stop-color`, `flood-color`, `lighting-color`,
   `color`; same properties inside `style="..."` and `<style>` text) used by

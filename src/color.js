@@ -55,8 +55,12 @@ export const namedColors = Object.freeze({
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 
+/**
+ * Regex source for a CSS `<number>` (lower-case `e`; use the `i` flag for
+ * mixed case). Shared with recolor.js.
+ */
+export const NUMBER = String.raw`[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?`;
 // A CSS <number>, optionally followed by a unit / %
-const NUMBER = String.raw`[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?`;
 const COMPONENT = new RegExp(String.raw`^(${NUMBER})(%|deg|grad|rad|turn)?$`);
 
 // Split the inside of `fn(...)` into [components, alpha]. Accepts the legacy
