@@ -13,7 +13,7 @@ import { icons } from "./icons.js";
  *   empty or placeholder SVG.
  * - Sources of **monochrome icons normalise their foreground to
  *   `currentColor`** before returning (built-ins: `#848484` -> `currentColor`
- *   at generate time; e.g. a Material Symbols resolver injects root
+ *   at generate time; `createMaterialResolver` (`@name?...`) injects root
  *   `fill="currentColor"` with `setRootAttribute`), so the svg layer's `color`
  *   colours every icon source the same way. Arbitrary user SVGs (files) are
  *   returned unchanged.

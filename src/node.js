@@ -6,25 +6,45 @@ import { render as renderCore } from "./render.js";
 import { createSvgResolver } from "./resolve.js";
 import { napiBackend } from "./backends/napi.js";
 import { createFileResolver } from "./node/fileResolver.js";
+import { createFsCache } from "./node/fsCache.js";
+import { createMaterialResolver } from "./material.js";
 
 export * from "./index.js";
-export { napiBackend, createFileResolver };
+export { napiBackend, createFileResolver, createFsCache };
 
 /**
- * Create an SVG resolver for Node: built-in `#name` icons (plus any extra
- * `prefixes`), with every other reference read as a file path.
+ * Create an SVG resolver for Node: built-in `#name` icons, `@name?...` Google
+ * Material Symbols (downloaded, cached on disk) and any extra `prefixes`, with
+ * every other reference read as a file path.
  * @param {object} [options]
  * @param {string} [options.baseDir] Directory relative file paths resolve
  *   against (default: the current working directory at resolve time).
  * @param {Parameters<typeof createSvgResolver>[0]["prefixes"]} [options.prefixes]
+ *   Extra/replacement handlers; these win over the defaults (`"@": null`
+ *   removes the Material handler).
+ * @param {false | Parameters<typeof createMaterialResolver>[0] & { cacheDir?: string }} [options.material]
+ *   Options for the `@` handler (`createMaterialResolver`), plus `cacheDir`
+ *   for its `createFsCache` (default `<os.tmpdir()>/button-face/material`);
+ *   `false` = don't register `@`.
  * @returns {(src: string) => Promise<string>}
  */
-export function createNodeSvgResolver({ baseDir, prefixes } = {})
+export function createNodeSvgResolver({ baseDir, prefixes, material } = {})
 {
-    return createSvgResolver({ prefixes, fallback: createFileResolver({ baseDir }) });
+    let defaults = [];
+    if (material !== false)
+    {
+        let { cacheDir, ...options } = material ?? {};
+        defaults.push(["@", createMaterialResolver({ cache: createFsCache({ dir: cacheDir }), ...options })]);
+    }
+    let extra = prefixes instanceof Map ? prefixes : Object.entries(prefixes ?? {});
+    return createSvgResolver({ prefixes: new Map([...defaults, ...extra]), fallback: createFileResolver({ baseDir }) });
 }
 
-/** The default Node resolver: `#name` built-ins, else file paths (cwd-relative). */
+/**
+ * The default Node resolver: `#name` built-ins, `@name?...` Material Symbols
+ * (cached in `<os.tmpdir()>/button-face/material`), else file paths
+ * (cwd-relative).
+ */
 export const resolveSvg = createNodeSvgResolver();
 
 /**

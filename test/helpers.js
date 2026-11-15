@@ -1,6 +1,9 @@
 // Shared helpers for render tests.
 
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import assert from "node:assert/strict";
 import { napiBackend } from "../src/backends/napi.js";
 
@@ -29,6 +32,42 @@ export function readFixture(name)
 
 /** The parsed package.json. */
 export const pkg = JSON.parse(readRepoFile("package.json"));
+
+/**
+ * A fresh temp directory for one test, removed (recursively) after it.
+ * @param {import("node:test").TestContext} t
+ * @returns {Promise<string>}
+ */
+export async function tempDir(t)
+{
+    let dir = await mkdtemp(join(tmpdir(), "button-face-test-"));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    return dir;
+}
+
+/** The HTML body a fake 404 response returns (like fonts.gstatic.com). */
+export const NOT_FOUND_HTML = "<!DOCTYPE html><html><body>Error 404 (Not Found)</body></html>";
+
+/**
+ * A fake `fetch` (no network): `routes` maps URL -> body (200) or an Error
+ * (rejects); any other URL 404s with HTML. `calls` records every URL fetched.
+ * @param {Record<string, string|Error>} [routes]
+ */
+export function fakeFetch(routes = {})
+{
+    let calls = [];
+    let fetch = async url =>
+    {
+        calls.push(url);
+        await null;
+        let body = routes[url];
+        if (body instanceof Error)
+            throw body;
+        let ok = body !== undefined;
+        return { ok, status: ok ? 200 : 404, text: async () => ok ? body : NOT_FOUND_HTML };
+    };
+    return { fetch, calls };
+}
 
 /**
  * Assert a source file (path relative to the repo root) has no Node-only or

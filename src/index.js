@@ -15,3 +15,8 @@ export { getSvgSize, padViewBox, parseViewBox, parseLength } from "./svgSize.js"
 export { createScaler, scaleFont, DEFAULT_VIRTUAL_SIZE } from "./scale.js";
 export { wrapLines } from "./wrapLines.js";
 export { convertLegacyDefinition } from "./legacy.js";
+export {
+    createMaterialResolver, MATERIAL_DEFAULTS, validateMaterialParams, parseMaterialRef,
+    materialVariant, materialIconUrl, materialCacheKey,
+} from "./material.js";
+export { createStorageCache } from "./storageCache.js";

@@ -113,6 +113,13 @@ the way (relevant files, APIs, gotchas, decisions made).
 - SVG references go through async prefix resolvers (`src/resolve.js`).
   Resolvers return SVG strings; monochrome sources normalise their
   foreground to `currentColor`.
+- `@name?...` = Google Material Symbols, downloaded at runtime by
+  `createMaterialResolver` (`src/material.js`, injectable `fetch`/`cache`,
+  normalises to root `fill="currentColor"` + `padViewBox(0.15)`). Caches are
+  generic `{ get, set }`: `src/storageCache.js` (browser localStorage, core)
+  and `src/node/fsCache.js` (Node, registered by `createNodeSvgResolver`).
+  Tests never hit the network unless `BUTTON_FACE_LIVE_TESTS=1`
+  (`test/material-live.test.js`).
 - svg layer recolouring is uniform: `currentColor` counts as the effective
   `color` (default `#848484`), so a `colors` key matching it also recolours
   `currentColor` - built-ins and file/inline SVGs recolour with the same map.

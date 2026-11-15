@@ -10,7 +10,10 @@ import * as node from "@toptensoftware/button-face/node";
 import { render as coreRender } from "../src/render.js";
 import { napiBackend } from "../src/backends/napi.js";
 import { icons } from "../src/icons.js";
-import { pixelAt, pixels, importGraph, assertBrowserSafe, readFixture, pkg } from "./helpers.js";
+import { createFsCache } from "../src/node/fsCache.js";
+import { pixelAt, pixels, importGraph, assertBrowserSafe, readFixture, pkg, tempDir, fakeFetch } from "./helpers.js";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 const fixturePath = fileURLToPath(new URL("fixtures/material-home.svg", import.meta.url));
 const fixtureSvg = readFixture("material-home.svg");
@@ -40,7 +43,9 @@ test("core entry exports the portable API", () =>
         "parseColor", "colorsEqual", "formatColor", "applyColorMap", "lookupColor", "mapPaintValues",
         "findPaintValues", "getRootAttribute", "setRootAttribute", "substituteText",
         "normalizeStyleLengths", "getSvgSize", "padViewBox", "createScaler", "scaleFont",
-        "DEFAULT_VIRTUAL_SIZE", "wrapLines", "convertLegacyDefinition"])
+        "DEFAULT_VIRTUAL_SIZE", "wrapLines", "convertLegacyDefinition",
+        "createMaterialResolver", "MATERIAL_DEFAULTS", "validateMaterialParams", "parseMaterialRef",
+        "materialVariant", "materialIconUrl", "materialCacheKey", "createStorageCache"])
     {
         assert.ok(name in core, `core is missing '${name}'`);
     }
@@ -51,14 +56,15 @@ test("core entry exports the portable API", () =>
 
 test("core entry exports nothing Node-only", () =>
 {
-    for (let name of ["napiBackend", "createFileResolver", "createNodeSvgResolver"])
+    for (let name of ["napiBackend", "createFileResolver", "createNodeSvgResolver", "createFsCache"])
         assert.ok(!(name in core), `core exports Node-only '${name}'`);
 });
 
 test("core import graph is browser-safe (no Node or native imports, no external deps)", () =>
 {
     let { files, external } = importGraph("src/index.js");
-    assert.ok(files.includes("src/render.js") && files.includes("src/layers/text.js") && files.includes("src/icons.js"),
+    assert.ok(files.includes("src/render.js") && files.includes("src/layers/text.js") && files.includes("src/icons.js")
+        && files.includes("src/material.js") && files.includes("src/storageCache.js"),
         `import graph not walked: ${files.join(", ")}`);
     assert.ok(!files.some(f => f.startsWith("src/node") || f.startsWith("src/backends/")),
         `core reaches Node modules: ${files.join(", ")}`);
@@ -72,6 +78,7 @@ test("importGraph sees the Node entry's Node-only imports (the check can fail)",
     let { files, external } = importGraph("src/node.js");
     assert.ok(files.includes("src/backends/napi.js"));
     assert.ok(files.includes("src/node/fileResolver.js"));
+    assert.ok(files.includes("src/node/fsCache.js"));
     assert.ok(external.includes("@napi-rs/canvas"));
     assert.ok(external.includes("node:fs/promises"));
 });
@@ -92,6 +99,7 @@ test("node entry re-exports the core API plus Node extras", () =>
     }
     assert.equal(node.napiBackend, napiBackend);
     assert.equal(typeof node.createFileResolver, "function");
+    assert.equal(node.createFsCache, createFsCache);
     assert.equal(typeof node.createNodeSvgResolver, "function");
     assert.equal(typeof node.resolveSvg, "function");
     assert.notEqual(node.render, core.render);
@@ -114,6 +122,36 @@ test("createNodeSvgResolver: baseDir and extra prefixes", async () =>
     assert.equal(await resolve("material-home.svg"), fixtureSvg);
     assert.equal(await resolve("@home"), `<svg id="home"/>`);
     assert.equal(await resolve("#heart"), icons.heart);
+});
+
+const HOME_FILL_URL = "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/home/wght200fill1/24px.svg";
+
+test("createNodeSvgResolver: '@' Material Symbols by default, cached in material.cacheDir", async (t) =>
+{
+    let cacheDir = await tempDir(t);
+    let served = fakeFetch({ [HOME_FILL_URL]: fixtureSvg });
+    let svg = await node.createNodeSvgResolver({ material: { fetch: served.fetch, cacheDir } })("@home?fill=1");
+    assert.match(svg, /^<svg[^>]*fill="currentColor"/);
+    assert.deepEqual(served.calls, [HOME_FILL_URL]);
+    assert.equal(await readFile(join(cacheDir, "outlined/home/wght200fill1/24.svg"), "utf8"), fixtureSvg);
+
+    // A second resolver on the same cacheDir is served from disk; other
+    // material options (pad) pass through.
+    let offline = fakeFetch();
+    let again = await node.createNodeSvgResolver({ material: { fetch: offline.fetch, cacheDir, pad: 0 } })("@home?fill=1");
+    assert.deepEqual(offline.calls, []);
+    assert.match(again, /viewBox="0 -960 960 960"/);
+});
+
+test("createNodeSvgResolver: material: false (or prefixes '@': null) leaves '@' to the file fallback", async () =>
+{
+    await assert.rejects(node.createNodeSvgResolver({ material: false })("@home"), { code: "ENOENT" });
+    await assert.rejects(node.createNodeSvgResolver({ prefixes: new Map([["@", null]]) })("@home"), { code: "ENOENT" });
+});
+
+test("node resolveSvg registers '@' (validation rejects before any network)", async () =>
+{
+    await assert.rejects(node.resolveSvg("@Bad"), /material icon 'Bad'/);
 });
 
 test("node render works with no options (napi backend, RGB, default resolver)", async () =>
