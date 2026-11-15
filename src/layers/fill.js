@@ -1,16 +1,13 @@
 // Fill layer: paints the whole button one colour (the old `backColor`).
 //   { type: "fill", color?: string = "black" }
 
-import { parseColor, formatColor } from "../color.js";
+import { validColor } from "./validate.js";
 
 /** @type {import("../render.js").LayerType} */
 export function fillLayer(layer, { width, height })
 {
     let { color = "black" } = layer;
-    let parsed = parseColor(color);
-    if (!parsed)
-        throw new TypeError(`fill layer: invalid color '${color}'`);
-    let fillStyle = formatColor(parsed);
+    let fillStyle = validColor("fill", "color", color);
     return ctx =>
     {
         ctx.fillStyle = fillStyle;

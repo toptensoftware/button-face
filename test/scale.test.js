@@ -69,6 +69,13 @@ describe("createScaler", () =>
         assert.throws(() => s.padding([1, 2, 3, 4, 5]), TypeError);
     });
 
+    test("padding: non-numeric values throw", () =>
+    {
+        let s = createScaler(undefined, 72, 72);
+        for (let p of ["3", [1, "2"], [1, 2, NaN, 4], Infinity, {}])
+            assert.throws(() => s.padding(p), /padding/, JSON.stringify(p));
+    });
+
     test("does not mutate the padding array", () =>
     {
         let p = [1, 2, 3, 4];

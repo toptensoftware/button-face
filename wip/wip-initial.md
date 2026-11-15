@@ -754,6 +754,34 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   inline tests, material red, hdd red - all now exercised through the layer).
   `npm test`: 546 tests, 546 pass (520 + 32 - 6).
 
+### Implement step 12 (text layer) - learnings
+- `src/layers/text.js` exports `textLayer` (sync), plus pure helpers
+  **`lineHeight(ctx, lineSpacing = 1)`** and **`layoutText(ctx, text, { width,
+  height, padding: Box, align, valign, lineSpacing, translate })`** -> `{ x,
+  lines: [{ text, y }] }` (all device px; the old drawText maths exactly,
+  incl. the dead `< 20` branch -> small text x1.1). Both take any object with
+  `measureText`, so they are tested exactly with a fake ctx.
+- Layer: `{ type: "text", text, font = "bold 16px sans-serif", color =
+  "white", align = "center", valign = "center", lineSpacing = 1, padding = 3,
+  translate }`. Font scaled by `scaler.sy` only (`scaleFont`); padding/
+  translate via `scaler.padding/translate`. Validation up front (TypeErrors
+  prefixed `text layer:`; scaleFont/padding errors are re-thrown with that
+  prefix). Empty/null text -> no-op painter.
+- **Measuring happens inside the painter** on the render ctx (font set
+  first), so wrap/measure and draw use the same engine; the painter sets
+  `font`, `fillStyle`, `textAlign`, `textBaseline = "top"` itself.
+- DRY: new `src/layers/validate.js` (`validColor(type, name, value)`,
+  `validateTranslate(type, t)`) now shared by fill, svg and text layers
+  (error messages unchanged).
+- `src/scale.js` `normalizePadding` now also rejects non-finite values
+  (`"3"`, `NaN`, `{}`) with the same `TypeError` (+1 test in scale.test.js).
+- Pixel-test gotcha: with `textBaseline = "top"` Skia glyph ink does not
+  start exactly at the em-box top and hinting makes that gap non-linear with
+  size (padding 10 at 72px -> ink top 9 incl. ~-1 overshoot; 144px -> 22, not
+  18). Tests therefore measure **ink shifts relative to a padding-0 render**
+  (`inkShift` in layers-text.test.js), which are exact to +/-1px.
+- Tests: `test/layers-text.test.js` (26). `npm test`: 573 tests, 573 pass.
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -1025,6 +1053,20 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
 - `#square` "centre ~#848484" tested on its outline pixel (it is hollow), as
   in step 3.
 
+### Implement step 12 - for user review
+- Text property names are `text`, `font`, `color`, `align`, `valign`,
+  `lineSpacing`, `padding`, `translate` (as in the Notes example definition).
+- `lineSpacing` must be a positive number; the old code silently treated
+  `0`/falsy as 1 - now `0` rejects.
+- `text` may be a string or number (numbers drawn via `String`); other types
+  reject. `null`/`""` draw nothing (old: text layer skipped when empty).
+- Invalid `align`/`valign` reject (old code fell back to left/top silently).
+- `color` default `white` (old `#ffffff`), only parseColor syntaxes accepted,
+  like the other layers.
+- The font string itself isn't validated beyond "is a string with a px
+  size"; an unparseable font is silently ignored by the canvas (keeps the
+  previous/default font), as in browsers.
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -1195,7 +1237,7 @@ ask the user to review.
   `getSvgSize` -> height = h*scale, width by aspect -> `loadSvgImage` ->
   position via scaler -> draw (tint via offscreen canvas + `source-in`).
   Remove/merge redundant spike tests from step 3.
-- [ ] 12. **Text layer (`src/layers/text.js`).** Tests first
+- [x] 12. **Text layer (`src/layers/text.js`).** Tests first
   (`test/layers-text.test.js`): pure helper `lineHeight(ctx, lineSpacing)`
   reproduces old heuristic (ascent+descent of "Xy", x1.1 if < 40 else x1.2,
   x lineSpacing) - unit-test the multiplier logic with a fake `measureText`;

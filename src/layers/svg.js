@@ -17,7 +17,7 @@
 // offscreen canvas + `source-in`). Sizes and positions round like the old
 // sharp-based renderer; anything outside the button is clipped by the canvas.
 
-import { parseColor, formatColor } from "../color.js";
+import { validColor, validateTranslate } from "./validate.js";
 import { applyColorMap, setRootColor, substituteText } from "../recolor.js";
 import { getSvgSize } from "../svgSize.js";
 
@@ -28,11 +28,11 @@ const DEFAULT_COLOR = "#848484";
 export async function svgLayer(layer, { width, height, scaler, backend, resolveSvg })
 {
     let { text, colors, color = DEFAULT_COLOR, tint, scale = 1, translate } = layer;
-    let colorValue = validColor("color", color);
-    let tintValue = tint == null ? null : validColor("tint", tint);
+    let colorValue = validColor("svg", "color", color);
+    let tintValue = tint == null ? null : validColor("svg", "tint", tint);
     if (typeof scale != "number" || !(scale > 0 && scale < Infinity))
         throw new TypeError(`svg layer: 'scale' must be a positive number; got ${JSON.stringify(scale)}`);
-    validateTranslate(translate);
+    validateTranslate("svg", translate);
 
     let svg = await loadSource(layer, resolveSvg);
     svg = substituteText(svg, text);
@@ -78,23 +78,6 @@ async function loadSource({ src, svg }, resolveSvg)
     if (typeof resolveSvg != "function")
         throw new TypeError(`svg layer: 'src' (${JSON.stringify(src)}) needs options.resolveSvg`);
     return await resolveSvg(src);
-}
-
-// Parse a CSS colour property; the result is canonical (#rrggbb / rgba()).
-function validColor(name, value)
-{
-    let parsed = parseColor(value);
-    if (!parsed)
-        throw new TypeError(`svg layer: invalid ${name} '${value}'`);
-    return formatColor(parsed);
-}
-
-function validateTranslate(t)
-{
-    let ok = t == null || (typeof t == "object"
-        && ["x", "y"].every(k => t[k] === undefined || Number.isFinite(t[k])));
-    if (!ok)
-        throw new TypeError(`svg layer: 'translate' must be { x?: number, y?: number }; got ${JSON.stringify(t)}`);
 }
 
 // Rasterise `image` onto an offscreen canvas and replace its colour with

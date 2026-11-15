@@ -58,13 +58,13 @@ export function createScaler(virtualSize, width, height)
 // number | [tb, lr] | [t, r, b, l] -> [t, r, b, l]
 function normalizePadding(p)
 {
-    if (!Array.isArray(p))
-        return [p, p, p, p];
-    if (p.length == 2)
-        return [p[0], p[1], p[0], p[1]];
-    if (p.length == 4)
-        return [...p];
-    throw new TypeError(`padding must be a number, [topBottom, leftRight] or [top, right, bottom, left]; got ${JSON.stringify(p)}`);
+    let sides = !Array.isArray(p) ? [p, p, p, p]
+        : p.length == 2 ? [p[0], p[1], p[0], p[1]]
+        : p.length == 4 ? [...p]
+        : null;
+    if (!sides?.every(Number.isFinite))
+        throw new TypeError(`padding must be a number, [topBottom, leftRight] or [top, right, bottom, left]; got ${JSON.stringify(p)}`);
+    return sides;
 }
 
 // The first `<number>px` in a CSS font string (not part of a longer word).
