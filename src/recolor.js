@@ -151,6 +151,40 @@ export function applyColorMap(svg, map)
 }
 
 const XML_ESCAPES = { "&": "&amp;", "<": "&lt;", '"': "&quot;", "'": "&apos;" };
+const XML_UNESCAPES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+
+/**
+ * Find the root element's start tag (first element outside comments, PIs and
+ * DOCTYPE) and check it is `<svg>`.
+ * @param {string} svg
+ * @returns {{ tag: string, index: number }}
+ * @throws if the document's root element is not `<svg>`
+ */
+function findRootTag(svg)
+{
+    let root = [...svg.matchAll(MARKUP)].find(m => m[0][1] != "!" && m[0][1] != "?");
+    let tag = root?.[1] ?? root?.[0];
+    if (!tag || /^<(?:[\w.-]+:)?([^\s/>]+)/.exec(tag)[1] != "svg")
+        throw new Error("document has no root <svg> element");
+    return { tag, index: root.index };
+}
+
+/**
+ * Read one attribute of the root `<svg>` element (XML entities decoded).
+ * @param {string} svg
+ * @param {string} name - exact attribute name, e.g. `viewBox`
+ * @returns {string|undefined} undefined when the attribute is absent
+ * @throws if the document's root element is not `<svg>`
+ */
+export function getRootAttribute(svg, name)
+{
+    for (let [, , attrName, , doubleQuoted, singleQuoted] of findRootTag(svg).tag.matchAll(ATTR))
+    {
+        if (attrName == name)
+            return (doubleQuoted ?? singleQuoted).replace(/&(amp|lt|gt|quot|apos);/g, (m, e) => XML_UNESCAPES[e]);
+    }
+    return undefined;
+}
 
 /**
  * Set (add or replace) one attribute on the root `<svg>` element. The rest of
@@ -164,11 +198,7 @@ const XML_ESCAPES = { "&": "&amp;", "<": "&lt;", '"': "&quot;", "'": "&apos;" };
  */
 export function setRootAttribute(svg, name, value)
 {
-    let root = [...svg.matchAll(MARKUP)].find(m => m[0][1] != "!" && m[0][1] != "?");
-    let tag = root?.[1] ?? root?.[0];
-    if (!tag || /^<(?:[\w.-]+:)?([^\s/>]+)/.exec(tag)[1] != "svg")
-        throw new Error("setRootAttribute: document has no root <svg> element");
-
+    let { tag, index } = findRootTag(svg);
     let escape = quote => String(value).replace(quote == `"` ? /[&<"]/g : /[&<']/g, c => XML_ESCAPES[c]);
     let found = false;
     let newTag = tag.replace(ATTR, (match, space, attrName, equals, doubleQuoted) =>
@@ -181,7 +211,7 @@ export function setRootAttribute(svg, name, value)
     });
     if (!found)
         newTag = tag.replace(/\s*\/?>$/, end => ` ${name}="${escape(`"`)}"${end}`);
-    return svg.slice(0, root.index) + newTag + svg.slice(root.index + tag.length);
+    return svg.slice(0, index) + newTag + svg.slice(index + tag.length);
 }
 
 /**

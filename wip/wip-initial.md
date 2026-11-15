@@ -531,6 +531,51 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   `applyColorMap`.
 - `npm test`: 326 tests, 326 pass (202 - 1 removed + 125 new).
 
+### Implement step 6 (scale.js, svgSize.js) - learnings
+- `src/scale.js` exports `DEFAULT_VIRTUAL_SIZE` (frozen 72x72),
+  `createScaler(virtualSize, width, height)` -> `{ sx, sy, x(v), y(v),
+  translate(t), padding(p) }` and `scaleFont(font, scale)`. Imports only
+  `NUMBER` from color.js.
+  - `virtualSize` null/undefined -> 72x72; non-positive/missing dims throw
+    `RangeError`. `translate(t)` -> `{x: t.x*sx, y: t.y*sy}`, missing parts
+    0. `padding(p)`: number | `[tb, lr]` | `[t, r, b, l]` ->
+    `{top,right,bottom,left}` (t/b by sy, l/r by sx); null/undefined -> all
+    0 (**the text layer must supply its own default `3`**; the old code
+    actually produced NaN padding when `textPadding` was unset, the readme's
+    default 3 lived in drawText); other array lengths throw `TypeError`.
+    Nothing is rounded - the svg layer rounds its final `left`/`top` like the
+    old code (`Math.round((w - svgW)/2 + t.x)`).
+  - `scaleFont` scales the first `<number>px` not preceded by a word char or
+    `.` (so `.5px` -> whole number, `Foo2px` family names don't match), keeps
+    the rest of the string (e.g. `16px/20px` -> `32px/20px`); throws without
+    a px size (message contains "px").
+- `src/svgSize.js` exports `parseLength`, `parseViewBox`, `getSvgSize`,
+  `padViewBox`. Imports `NUMBER` (color.js) and `getRootAttribute`/
+  `setRootAttribute` (recolor.js) - no second root-tag parser.
+  - `getSvgSize`: width/height attrs (unitless/px = user units; pt/pc/in/
+    cm/mm at 96 px/in; `%`, em/ex, 0, negative = unusable); one usable ->
+    other from viewBox aspect; none -> viewBox width/height (origin
+    irrelevant, so `0 -960 960 960` + `width="24"` -> 24x24); else 300/150
+    per missing dimension. Throws if the root isn't `<svg>`.
+  - Matches the old behaviour where it matters: the old renderer set the
+    rendered height to `device height x svgScale` and used the natural size
+    only for the **aspect ratio** (density = 72*scale*h/meta.height), so the
+    absolute unit conversion (96 vs sharp's 72 dpi) has no effect on output.
+    Both icon families: 24x24 (Material-derived) and 72x72 (Inkscape).
+  - `padViewBox(svg, fraction)` pads the root viewBox by `fraction` of its
+    width/height per side, keeping width/height (content shrinks). Material
+    fixture + 0.15 -> exactly `-144 -1104 1248 1248` (built-in padding).
+    Numbers tidied via `toPrecision(12)` (no `143.99999999999997`). No
+    viewBox -> one is created from `getSvgSize` first. 0/missing -> input
+    returned; `<= -0.5` throws `RangeError`. Ready for the material job.
+- `src/recolor.js`: extracted internal `findRootTag(svg)` (shared by
+  `setRootAttribute` and the new exported **`getRootAttribute(svg, name)`**
+  -> value with XML entities decoded, or undefined). The root error message
+  is now `document has no root <svg> element` (no function prefix).
+- Tests: `test/scale.test.js` (14), `test/svgSize.test.js` (22),
+  `getRootAttribute` tests added to `test/recolor.test.js` (4).
+  `npm test`: 366 tests, 366 pass.
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -718,6 +763,21 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
   `letter-spacing`/`word-spacing`, untested in Skia).
 - `setRootColor` kept as a wrapper (step 11's pipeline names it).
 
+### Implement step 6 - for user review
+- `padViewBox` implemented here now (the optional part of step 6), with the
+  material job's semantics (fraction of the viewBox per side, width/height
+  kept).
+- `getSvgSize` unit conversion uses CSS 96 px/in (old sharp metadata used 72
+  dpi); harmless since only the aspect ratio feeds the scaling maths.
+- Missing-dimension fallback: one usable dimension + viewBox -> aspect ratio;
+  without a viewBox each missing dimension defaults to 300 / 150 (so
+  `width="40"` alone -> 40x150), rather than e.g. making it square.
+- `createScaler().padding(undefined)` is 0, not 3 - the text layer owns the
+  default. Invalid padding arrays throw instead of producing NaN.
+- `scaleFont` accepts `.5px`/exponents (old regex matched `5px` inside
+  `.5px`) and won't match a px suffix glued to a word; otherwise identical.
+- No rounding in the scaler; consumers round final positions as before.
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -808,7 +868,7 @@ ask the user to review.
   (`opacity:0.5`, `stroke-miterlimit:4`, `fill-opacity`) untouched; rest of
   the SVG byte-for-byte identical. Optionally replace the literal
   `strokeValues` regex in `test/icons.test.js` with the tokeniser if exported.
-- [ ] 6. **Shared maths (`src/scale.js`, `src/svgSize.js`).** Tests first.
+- [x] 6. **Shared maths (`src/scale.js`, `src/svgSize.js`).** Tests first.
   `createScaler(virtualSize, width, height)` -> `{ sx, sy, x(v), y(v),
   translate({x,y}), padding(p) }` where `padding` normalises number |
   `[tb, lr]` | `[t, r, b, l]` to `{top,right,bottom,left}` device px (t/b by

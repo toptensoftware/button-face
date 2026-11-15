@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import {
     applyColorMap, findPaintValues, normalizeStyleLengths,
-    setRootAttribute, setRootColor, substituteText,
+    setRootAttribute, setRootColor, substituteText, getRootAttribute,
 } from "../src/recolor.js";
 
 const root = new URL("../", import.meta.url);
@@ -246,6 +246,36 @@ describe("setRootAttribute / setRootColor", () =>
     {
         assert.equal(setRootColor(`<svg fill="currentColor"><path/></svg>`, "red"),
             `<svg fill="currentColor" color="red"><path/></svg>`);
+    });
+});
+
+describe("getRootAttribute", () =>
+{
+    test("reads root attributes (one-line and multi-line root tags)", () =>
+    {
+        assert.equal(getRootAttribute(materialHome, "viewBox"), "0 -960 960 960");
+        assert.equal(getRootAttribute(materialHome, "width"), "24");
+        assert.equal(getRootAttribute(readIcon("guide"), "height"), "24px");
+        assert.equal(getRootAttribute(readIcon("home"), "viewBox"), "0 0 19.05 19.05");
+    });
+
+    test("missing attribute is undefined; exact name only; root only", () =>
+    {
+        let svg = `<svg data-fill="x" fill-opacity="1"><svg fill="b"/><path fill="c"/></svg>`;
+        assert.equal(getRootAttribute(svg, "fill"), undefined);
+        assert.equal(getRootAttribute(`<!-- <svg fill="x"> --><svg fill='a'><svg fill="b"/></svg>`, "fill"), "a");
+    });
+
+    test("unescapes XML entities (round-trips setRootAttribute)", () =>
+    {
+        let value = `x"y'&<>`;
+        assert.equal(getRootAttribute(setRootAttribute(`<svg/>`, "a", value), "a"), value);
+        assert.equal(getRootAttribute(setRootAttribute(`<svg a='1'/>`, "a", value), "a"), value);
+    });
+
+    test("throws when the root element is not <svg>", () =>
+    {
+        assert.throws(() => getRootAttribute(`<html><svg/></html>`, "a"), /root <svg>/);
     });
 });
 
