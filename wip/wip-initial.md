@@ -456,6 +456,30 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   (gitignored; the originals are also in `../node-buttonImage/images/`).
 - `npm test`: 189 tests, 189 pass, 0 todo.
 
+### Implement step 4 (color.js) - learnings
+- `src/color.js` exports `parseColor(css) -> {r,g,b,a}|null` (r/g/b ints
+  0..255, a 0..1), `colorsEqual(a, b)` (each a CSS string or parsed colour;
+  RGB exact, alpha compared at 8-bit precision `round(a*255)`; non-colours
+  never match, even `none` vs `none`), `formatColor({r,g,b,a})` (`#rrggbb`
+  when a is 1/missing, else `rgba(r, g, b, a)` with a to 3 decimals), and
+  `namedColors` (frozen, 148 lower-case names -> `#rrggbb`; `transparent`
+  handled separately). No imports at all.
+- Parsing details: input trimmed + case-insensitive; `rgb`/`rgba` and
+  `hsl`/`hsla` are aliases (either takes 3 or 4 values); comma syntax with
+  optional 4th alpha, or space syntax with optional `/ alpha`; mixing comma
+  and `/` is rejected; alpha may be number or %; out-of-range values clamp;
+  hue units deg/grad/rad/turn, negative hues wrap; hsl s/l must be %.
+  `Object.hasOwn` guards the name lookup (`toString`, `__proto__` -> null).
+- Gotcha: `50 * 2.55` = 127.4999 in floating point; percentages use
+  `v * 255 / 100` so 50% rounds to 128 like browsers/Skia.
+- `test/color.test.js` (13 tests) cross-checks **every named colour** and a
+  set of rgb/hsl strings against Skia by painting them as the canvas
+  `fillStyle` (reusing `drawSvg`'s `background` arg on an empty 1x1 SVG) -
+  so the name table is verified, not just spot-checked. When step 8 swaps
+  `drawSvg` to the backend this keeps working (background still uses
+  `fillStyle`).
+- `npm test`: 202 tests, 202 pass.
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -613,6 +637,18 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
 - The old `todo` test was kept as a characterisation test of the Skia quirk
   (asserts the bug exists), not deleted.
 
+### Implement step 4 - for user review
+- "Match RGB + alpha exactly" interpreted as alpha equal at 8-bit precision
+  (`round(a*255)`), so `#ff000080` == `rgba(255,0,0,0.5)`; otherwise the hex
+  and decimal spellings of the same alpha could never match.
+- `colorsEqual` accepts CSS strings or parsed colours (convenient for the
+  colour-map code), and returns false when either side isn't a colour.
+- Only sRGB forms listed in the plan are supported (no `hwb()`, `lab()`,
+  `oklch()`, `color()`, system colours) - those parse as null, so a colour
+  map simply won't match them.
+- `formatColor` rounds alpha to 3 decimals; r/g/b are assumed to be integers
+  0..255 (not clamped).
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -664,7 +700,7 @@ ask the user to review.
   filled paths (`scripts/strokes-to-paths.js`), `test/icons.test.js` enforces
   no strokes + librsvg-reference likeness for all 42, README authoring note
   added; the render-time fallback is folded into steps 5 and 8.
-- [ ] 4. **Colour utility (`src/color.js`).** Tests first
+- [x] 4. **Colour utility (`src/color.js`).** Tests first
   (`test/color.test.js`): `parseColor` -> `{r,g,b,a}` (a 0..1) or `null` for
   `#rgb/#rgba/#rrggbb/#rrggbbaa` (any case), `rgb()/rgba()` comma + space
   syntax + `/ alpha` + `%`, `hsl()/hsla()`, all 148 named colours (spot-check
