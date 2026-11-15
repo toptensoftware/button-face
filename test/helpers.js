@@ -1,6 +1,19 @@
 // Shared helpers for render tests.
 
+import { readFileSync } from "node:fs";
+import assert from "node:assert/strict";
 import { napiBackend } from "../src/backends/napi.js";
+
+/**
+ * Assert a source file (path relative to the repo root) has no Node-only or
+ * native imports (`node:*`, `fs`, `path`, `@napi-rs/*`), i.e. is browser-safe.
+ * @param {string} relPath e.g. "src/render.js"
+ */
+export function assertBrowserSafe(relPath)
+{
+    let source = readFileSync(new URL(`../${relPath}`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /from\s+["'](node:|fs["']|path["']|@napi-rs)/, `${relPath} is not browser-safe`);
+}
 
 /**
  * Rasterise an SVG string onto a new transparent canvas of the given size,
@@ -97,6 +110,16 @@ export function inkStats(result)
     }
     let color = coverage ? { r: Math.round(r / coverage), g: Math.round(g / coverage), b: Math.round(b / coverage) } : null;
     return { coverage: Math.round(coverage * 10) / 10, bounds: findInkBounds(result), color };
+}
+
+/**
+ * Assert every pixel of `result` is within `tolerance` of `expected` (see
+ * `expectColorNear`; alpha only checked when `expected.a` is given).
+ */
+export function expectAllPixels(result, expected, tolerance = 2)
+{
+    for (let [x, y, p] of pixels(result))
+        expectColorNear(p, expected, tolerance, `pixel (${x}, ${y}): `);
 }
 
 /**

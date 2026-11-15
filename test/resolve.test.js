@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { createSvgResolver, resolveBuiltinIcon } from "../src/resolve.js";
 import { createFileResolver } from "../src/node/fileResolver.js";
 import { icons } from "../src/icons.js";
+import { assertBrowserSafe } from "./helpers.js";
 
 const root = new URL("../", import.meta.url);
 const fixturesDir = fileURLToPath(new URL("test/fixtures/", root));
@@ -164,8 +165,7 @@ test("prefixes may be given as a Map", async () =>
 
 test("src/resolve.js imports no Node modules", () =>
 {
-    let source = readFileSync(new URL("src/resolve.js", root), "utf8");
-    assert.doesNotMatch(source, /from\s+["'](node:|fs|path|@napi-rs)/);
+    assertBrowserSafe("src/resolve.js");
 });
 
 // ---- Node file resolver ----------------------------------------------------

@@ -676,6 +676,51 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   `test/fixtures/material-home.svg` used for the file resolver; BOM case via a
   temp dir). `npm test`: 490 tests, 490 pass.
 
+### Implement step 10 (render core + fill layer) - learnings
+- `src/render.js` exports **`render(definition, width, height, { backend,
+  resolveSvg, channels = 3 })`** -> `Promise<{ data: Uint8Array, width,
+  height, channels }>` and the frozen registry **`layerTypes`** `{ fill, svg,
+  text }`. Imports only `./scale.js` and `./layers/*.js` (no backend import).
+  JSDoc typedefs there: `Definition`, `Layer`, `RenderOptions`, `LayerEnv`,
+  `Painter`, `LayerType`, `RenderResult`.
+- **Layer type contract** (what steps 11/12 implement): a module in
+  `src/layers/` exports a named function `(layer, env) => Painter |
+  Promise<Painter>`; `env = { width, height, scaler, backend, resolveSvg }`
+  (scaler = `createScaler(definition.virtualSize, w, h)`, built once by the
+  core). It validates the layer and does all async work (resolve, decode,
+  offscreen tint canvas via `env.backend`) up front, then returns a **sync**
+  `Painter (ctx) => void`. The core owns `visible`/`opacity` (validated for
+  every layer; hidden or opacity 0 -> the type function is not even called),
+  `ctx.save()` / `globalAlpha = opacity` / `restore()` around each painter,
+  layer order, and output. `src/layers/svg.js` / `text.js` are placeholder
+  modules exporting `svgLayer` / `textLayer` that throw `"<type> layer: not
+  implemented"` - **steps 11/12 just replace those files; `render.js` needs
+  no change.** Painters must not depend on prior ctx state (fillStyle,
+  composite op, ...) - set what they use.
+- All layers are prepared concurrently (`Promise.all`), then painted in
+  array order - so an error in any layer rejects before anything is drawn,
+  and several svg layers resolve/decode in parallel.
+- Validation (all reject, since `render` is async): width/height positive
+  integers (`RangeError`), channels exactly 3 or 4 (`RangeError`), backend
+  with `createCanvas` + `loadSvgImage` (`TypeError`), definition object,
+  `layers` array (missing = empty), layer object with string `type`,
+  unknown type -> `TypeError "render: unknown layer type 'x'"` (own-property
+  lookup), `visible` boolean, `opacity` number 0..1 (`TypeError`), bad
+  `virtualSize` -> scaler's `RangeError`. `resolveSvg` is optional (only svg
+  layers using `src` need it - step 11 should throw a clear error if absent).
+- Output: RGB composites over black **on the canvas** (`destination-over`
+  black `fillRect` after all layers), then strips alpha; RGBA is a
+  `Uint8Array` view over `getImageData().data` (non-premultiplied).
+- `src/layers/fill.js` exports `fillLayer`: `{ type: "fill", color = "black"
+  }`; colour validated with `parseColor` (invalid/`currentColor`/non-string
+  -> `TypeError "fill layer: invalid color 'x'"`) and passed to the canvas as
+  `formatColor(parsed)` so the canvas only ever sees `#rrggbb`/`rgba()`.
+- Test helpers added to `test/helpers.js`: `expectAllPixels(result,
+  expected, tol)` and `assertBrowserSafe(relPath)` (static "no node:/fs/
+  path/@napi-rs import" check; `resolve.test.js` now uses it too).
+- Tests: `test/render.test.js` (24), `test/layers-fill.test.js` (6).
+  `npm test`: 520 tests, 520 pass.
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -914,6 +959,26 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
 - Resolved SVGs are returned uncached; caching is the material resolver's
   job (per its plan).
 
+### Implement step 10 - for user review
+- Fill `color` defaults to `black` (old `backColor ?? "black"`), and an
+  unparseable colour rejects rather than being silently ignored by the
+  canvas. Consequence: only the colour syntaxes `parseColor` supports work
+  (no `oklch()`/`hwb()` etc.).
+- Invalid `opacity`/`visible` reject (`TypeError`) instead of clamping;
+  `opacity: 0` skips the layer like `visible: false`. A hidden layer's own
+  properties are not validated (only `type`/`visible`/`opacity`).
+- Layers are prepared concurrently then painted in order (vs. strictly
+  sequential load+draw) - same output, faster with several svg layers.
+- RGB "over black" is done with a canvas `destination-over` fill rather
+  than manual per-pixel maths (same result, uses the backend's compositing).
+- `layerTypes` is exported (read-only) from `render.js`; no option to
+  register custom layer types yet.
+- svg/text placeholders are separate stub modules (not inline in the
+  registry) and have no tests asserting "not implemented" (they'd be deleted
+  in steps 11/12).
+- `render` and `layerTypes` are not yet exported from a package entry
+  (step 13).
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -1055,7 +1120,7 @@ ask the user to review.
   lives in `src/node.js`-side module (e.g. `src/node/fileResolver.js`), tested
   with a fixture SVG in `test/fixtures/`. Keeps the async pluggable shape the
   material-icons job needs.
-- [ ] 10. **Render core + fill layer.** Tests first (`test/render.test.js`,
+- [x] 10. **Render core + fill layer.** Tests first (`test/render.test.js`,
   `test/layers-fill.test.js`): `render(definition, w, h, { backend,
   resolveSvg, channels })` returns `{ data: Uint8Array, width, height,
   channels }`; channels 3 -> length w*h*3, 4 -> w*h*4, other -> throws;
