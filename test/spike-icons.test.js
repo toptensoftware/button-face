@@ -5,19 +5,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { drawSvg, pixelAt, pixels, findInkBounds, expectColorNear } from "./helpers.js";
+import { drawSvg, pixels, findInkBounds, expectColorNear } from "./helpers.js";
 
 const root = new URL("../", import.meta.url);
 const iconsDir = new URL("icons/", root);
 const iconNames = readdirSync(iconsDir).filter(f => f.endsWith(".svg")).map(f => f.slice(0, -4)).sort();
 const readIcon = name => readFileSync(new URL(`${name}.svg`, iconsDir), "utf8");
 const materialHome = readFileSync(new URL("test/fixtures/material-home.svg", root), "utf8");
-
-const GREY = { r: 0x84, g: 0x84, b: 0x84 };
-const RED = { r: 255, g: 0, b: 0 };
-
-// Spike-local stand-in for step 5's setRootAttribute (one-line root tags only).
-const withRootAttrs = (svg, attrs) => svg.replace("<svg ", `<svg ${attrs} `);
 
 // Opaque pixels only
 const opaquePixels = result => [...pixels(result)].map(([, , p]) => p).filter(p => p.a == 255);
@@ -39,48 +33,9 @@ for (let name of iconNames)
     });
 }
 
-for (let name of ["square", "circle"])
-{
-    test(`icon ${name} outline is #848484`, async () =>
-    {
-        // Both are outlines (hollow), so sample the most opaque pixel on the
-        // left half of the middle row. The outline is ~2.6px wide, so it may
-        // not cover any pixel fully.
-        let result = await drawSvg(readIcon(name), 72, 72);
-        let best = pixelAt(result, 0, 36);
-        for (let x = 1; x < 36; x++)
-        {
-            let p = pixelAt(result, x, 36);
-            if (p.a > best.a)
-                best = p;
-        }
-        assert.ok(best.a >= 200, `outline too faint on the middle row (alpha ${best.a})`);
-        expectColorNear(best, GREY, 2);
-    });
-}
-
-test("currentColor paint resolves to root color attribute", async () =>
-{
-    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" color="red"><rect width="10" height="10" fill="currentColor"/></svg>`;
-    let result = await drawSvg(svg, 20, 20);
-    expectColorNear(pixelAt(result, 10, 10), { ...RED, a: 255 });
-});
-
-test("root fill=currentColor is inherited by unpainted paths", async () =>
-{
-    let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" color="red"><path d="M0 0h10v10H0z"/></svg>`;
-    let result = await drawSvg(svg, 20, 20);
-    expectColorNear(pixelAt(result, 10, 10), { ...RED, a: 255 });
-});
-
-test("material icon with root fill=currentColor + color renders red", async () =>
-{
-    let result = await drawSvg(withRootAttrs(materialHome, `fill="currentColor" color="red"`), 72, 72);
-    let ink = opaquePixels(result);
-    assert.ok(ink.length > 100, "too little ink");
-    for (let p of ink)
-        expectColorNear(p, RED, 2);
-});
+// The #square/#circle colour, currentColor / inherited root fill and
+// material-icon-recolour spike tests moved to layers-svg.test.js (step 11),
+// where they run through the svg layer.
 
 test("material icon without fill renders black (implicit default)", async () =>
 {
@@ -144,10 +99,4 @@ test("icon apple-tv is uniform #848484 (style fill overrides its gradient fill a
 });
 
 // The Skia unitless stroke-width quirk test moved to backend.test.js (step 8).
-
-test("hdd keeps its red circle", async () =>
-{
-    let result = await drawSvg(readIcon("hdd"), 72, 72);
-    let reds = opaquePixels(result).filter(p => p.r > 200 && p.g < 40 && p.b < 40);
-    assert.ok(reds.length > 100, `only ${reds.length} red pixels`);
-});
+// "hdd keeps its red" moved to layers-svg.test.js (step 11).

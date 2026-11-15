@@ -721,6 +721,39 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
 - Tests: `test/render.test.js` (24), `test/layers-fill.test.js` (6).
   `npm test`: 520 tests, 520 pass.
 
+### Implement step 11 (svg layer) - learnings
+- `src/layers/svg.js` exports `svgLayer` (async): `{ type: "svg", src | svg
+  (exactly one, non-empty string), text, colors, color = "#848484", tint,
+  scale = 1, translate }`. Imports only `../color.js`, `../recolor.js`,
+  `../svgSize.js` (browser-safe; the render test's browser-safe check
+  covers it). `render.js` unchanged.
+- Pipeline: `loadSource` (inline `svg`, or `await env.resolveSvg(src)`;
+  missing resolver -> `TypeError "svg layer: 'src' ("#heart") needs
+  options.resolveSvg"`) -> `substituteText` -> `applyColorMap` ->
+  `setRootColor(formatColor(parseColor(color)))` -> `getSvgSize` (aspect
+  only) -> `backend.loadSvgImage(svg, svgW, svgH)` -> optional tint ->
+  painter `ctx.drawImage(image, left, top, svgW, svgH)`.
+- **Rounding verified against the old sharp** (`scratch/sharp-svg-rounding.js`,
+  borrows sharp from `../node-buttonImage`): sharp rounds each rendered
+  dimension independently, half up (4.5x4.5 -> 5x5, 10.5x3.5 -> 11x4,
+  9x4.5 -> 9x5). So `svgH = Math.round(h*scale)`, `svgW =
+  Math.round(h*scale*natW/natH)` (from the unrounded height), then `left/top =
+  Math.round((w - svgW)/2 + t.x)` exactly as the old code. A size that
+  rounds to 0 returns a no-op painter (nothing loaded/drawn).
+- Cropping needs no code: the canvas clips `drawImage` outside the button.
+- Tint: offscreen `backend.createCanvas(svgW, svgH)`, draw image,
+  `source-in` `fillRect(tint)`; the painter draws that canvas (napi's
+  `drawImage` accepts a Canvas; browsers do too). Tint alpha multiplies
+  (`rgba(0,0,255,.5)` -> alpha 128).
+- `color`/`tint` validated with `parseColor` and passed as `formatColor`
+  (like the fill layer); `colors` keys are validated by `applyColorMap`.
+  `scale` must be a finite number > 0; `translate` null or `{x?, y?}` finite
+  numbers (`TypeError`s naming the property).
+- Tests: `test/layers-svg.test.js` (32). Superseded spike tests removed from
+  `spike-icons.test.js` (square/circle colour, 2 currentColor/inherited-fill
+  inline tests, material red, hdd red - all now exercised through the layer).
+  `npm test`: 546 tests, 546 pass (520 + 32 - 6).
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -979,6 +1012,19 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
 - `render` and `layerTypes` are not yet exported from a package entry
   (step 13).
 
+### Implement step 11 - for user review
+- The default `color` (`#848484`) is **always** written to the root `color`
+  attribute, so it overrides a root `color` an SVG author set themselves
+  (only matters for SVGs using `currentColor` with their own root colour).
+- `tint` is any parseColor colour; its alpha multiplies the SVG's alpha.
+  `tint: null` = no tint. Tint and `color`/`colors` can be combined (tint
+  wins visually, since it replaces all colour).
+- `scale` that rounds to 0 px silently draws nothing (no error).
+- `text` follows `substituteText` (number allowed; empty/null leaves `$(x)`);
+  not validated further.
+- `#square` "centre ~#848484" tested on its outline pixel (it is hollow), as
+  in step 3.
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -1132,7 +1178,7 @@ ask the user to review.
   `getImageData` (non-premultiplied) + alpha strip for RGB composited over
   black) and `src/layers/fill.js`. svg/text registered as stubs that throw
   "not implemented" until steps 11/12.
-- [ ] 11. **SVG layer (`src/layers/svg.js`).** Tests first
+- [x] 11. **SVG layer (`src/layers/svg.js`).** Tests first
   (`test/layers-svg.test.js`, using helpers + Node backend): `#square`
   default colour -> centre ~`#848484`; `color: "red"` -> red; inline `svg`
   with `colors: {"#848484": "lime"}` -> lime; `tint: "blue"` turns a
