@@ -1,0 +1,25 @@
+{
+  "name": "@toptensoftware/button-face",
+  "version": "0.0.1",
+  "description": "Layered button image renderer (fill, SVG and text layers) for Node and the browser",
+  "type": "module",
+  "license": "MIT",
+  "author": "Topten Software",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toptensoftware/button-face.git"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "src/",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.1.1"
+  }
+}
