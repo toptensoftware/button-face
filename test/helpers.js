@@ -1,29 +1,27 @@
 // Shared helpers for render tests.
-//
-// NOTE: `drawSvg` is a Plan step 3 spike helper that talks to @napi-rs/canvas
-// directly. Step 8 replaces it with the Node backend (`src/backends/napi.js`),
-// which becomes the only module importing @napi-rs/canvas.
 
-import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { napiBackend } from "../src/backends/napi.js";
 
 /**
- * Rasterise an SVG string onto a new transparent canvas of the given size.
+ * Rasterise an SVG string onto a new transparent canvas of the given size,
+ * through a rendering backend (default: the Node backend).
  * @param {string} svg
  * @param {number} width
  * @param {number} height
  * @param {string} [background] optional CSS colour painted first
+ * @param {import("../src/backend.js").Backend} [backend]
  * @returns {Promise<{ data: Uint8ClampedArray, width: number, height: number, channels: 4 }>}
  */
-export async function drawSvg(svg, width, height, background)
+export async function drawSvg(svg, width, height, background, backend = napiBackend)
 {
-    let canvas = createCanvas(width, height);
+    let canvas = backend.createCanvas(width, height);
     let ctx = canvas.getContext("2d");
     if (background)
     {
         ctx.fillStyle = background;
         ctx.fillRect(0, 0, width, height);
     }
-    let img = await loadImage(Buffer.from(svg));
+    let img = await backend.loadSvgImage(svg, width, height);
     ctx.drawImage(img, 0, 0, width, height);
     let data = ctx.getImageData(0, 0, width, height).data;
     return { data, width, height, channels: 4 };

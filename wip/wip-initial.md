@@ -616,6 +616,35 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   raw sources, proving the generated module renders like the originals.
 - `npm test`: 457 tests, 457 pass (366 + 2 recolor + 89 icons).
 
+### Implement step 8 (backend) - learnings
+- `src/backend.js`: JSDoc typedefs only (`export {}`): `Backend =
+  { createCanvas(w, h) -> Canvas, loadSvgImage(svg, w, h) -> Promise<Drawable> }`;
+  `Canvas` = `{ width, height, getContext("2d") }`; `Context2D` = standard
+  `CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D`; `Drawable`
+  is opaque (only ever passed back to `ctx.drawImage(img, x, y, w, h)` on the
+  same backend's contexts). `w`/`h` on `loadSvgImage` = the device size the
+  caller will draw it at, so a browser backend can rasterise at that size
+  (e.g. `createImageBitmap(blob, { resizeWidth, resizeHeight })`); the napi
+  backend ignores them (Skia draws SVG as vectors at the drawImage size).
+- `src/backends/napi.js` exports a frozen **`napiBackend`** object (named
+  export, no default). Only file in `src/` importing `@napi-rs/canvas` (grep
+  `from "(node:|@napi-rs)` in `src/` confirms). `loadSvgImage` runs
+  `normalizeStyleLengths` then `loadImage(Buffer.from(...))`; it throws
+  `TypeError` for a non-string/blank source itself (Skia rejects garbage and
+  truncated markup on its own).
+- `test/helpers.js` `drawSvg(svg, w, h, background?, backend = napiBackend)`
+  - now goes through a backend; the 5th arg lets a test pass a raw-Skia
+  pseudo-backend. All render tests (icons librsvg-reference, colour
+  cross-check, spike) now run through the backend and still pass.
+- The Skia-quirk characterisation test moved from `spike-icons.test.js` to
+  `test/backend.test.js`, drawing via a local `rawSkia` backend
+  (`loadImage` with no patching), next to the test asserting the backend's
+  patched behaviour (unitless `stroke-width:8` in style -> 8 wide).
+- `test/backend.test.js`: 11 tests (contract shape, canvas size + transparent,
+  RGBA non-premultiplied `getImageData`, 10x10 red SVG at 20x20 fills, offset
+  drawImage, 3 invalid-SVG rejections, normalize applied, raw quirk, drawSvg
+  background). `npm test`: 467 tests, 467 pass (457 - 1 moved + 11).
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -829,6 +858,17 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
   "edit `icons/*.svg`, then `npm run build:icons`" (proposal for step 15).
 - The 5 CRLF working-tree icons were left as-is (git index is LF).
 
+### Implement step 8 - for user review
+- Backend is a plain frozen object `napiBackend` (not a class/factory); no
+  per-instance options needed yet. `src/node.js` (step 13) can default to it.
+- `Drawable` has no `close()`/dispose in the contract (a browser
+  `ImageBitmap` could be closed after drawing; left out to keep it minimal).
+- `loadSvgImage` does not validate/clamp `w`/`h`; the napi backend ignores
+  them.
+- The quirk test lives in `test/backend.test.js` (moved, not duplicated);
+  test files may import `@napi-rs/canvas` directly - the "only importer"
+  rule applies to `src/`.
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -942,7 +982,7 @@ ask the user to review.
   `generateIconsModule()` + CLI `npm run build:icons` that writes the file,
   only when run as main). Uses `applyColorMap` (DRY). Generated file has a
   "GENERATED - do not edit" header and deterministic (sorted) order.
-- [ ] 8. **Backend abstraction + Node backend.** Define the backend contract
+- [x] 8. **Backend abstraction + Node backend.** Define the backend contract
   in JSDoc (`src/backend.js` typedef only): `createCanvas(w, h)` -> canvas with
   `getContext("2d")`; `loadSvgImage(svgString, w, h)` -> `Promise<drawable>`
   usable with `ctx.drawImage`. Implement `src/backends/napi.js` with

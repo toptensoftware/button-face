@@ -143,22 +143,7 @@ test("icon apple-tv is uniform #848484 (style fill overrides its gradient fill a
     assert.deepEqual([...distinctColours(result)], ["132,132,132"]);
 });
 
-// Known Skia (@napi-rs/canvas 1.1.1) quirk, see wip/wip-initial.md step 3:
-// a *unitless* `stroke-width` inside `style="..."` is ignored (falls back to 1
-// user unit); it works with a `px` unit (and as an attribute). Browsers and
-// librsvg accept it. The built-in icons avoid strokes altogether (see
-// icons.test.js); step 8's Node backend patches third-party SVGs with
-// `normalizeStyleLengths`. If this test starts failing, Skia has fixed the bug
-// and that patch may no longer be needed.
-test("Skia quirk: unitless stroke-width in style is ignored, px is honoured", async () =>
-{
-    const box = style => `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><path d="M10 10h80v80H10z" style="fill:none;stroke:red;${style}"/></svg>`;
-    let unitless = await drawSvg(box("stroke-width:8"), 100, 100);
-    let px = await drawSvg(box("stroke-width:8px"), 100, 100);
-    // Stroke spans x 6..14; x=12 is inside an 8-wide stroke but not a 1-wide one.
-    expectColorNear(pixelAt(px, 12, 50), { ...RED, a: 255 }, 2, "px: ");
-    assert.equal(pixelAt(unitless, 12, 50).a, 0, "unitless stroke-width is now honoured - Skia fixed?");
-});
+// The Skia unitless stroke-width quirk test moved to backend.test.js (step 8).
 
 test("hdd keeps its red circle", async () =>
 {
