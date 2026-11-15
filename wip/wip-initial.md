@@ -645,6 +645,37 @@ and step 8 (backend calls it; the `todo` test becomes a real test).
   drawImage, 3 invalid-SVG rejections, normalize applied, raw quirk, drawSvg
   background). `npm test`: 467 tests, 467 pass (457 - 1 moved + 11).
 
+### Implement step 9 (resolve.js) - learnings
+- `src/resolve.js` (imports only `./icons.js`) exports
+  **`createSvgResolver({ prefixes, fallback } = {})`** -> `async
+  resolveSvg(src) -> string` and **`resolveBuiltinIcon(name)`** (the `#`
+  handler; throws `unknown built-in icon '#name'`, `Object.hasOwn` guard).
+  JSDoc `SvgSourceResolver` callback typedef documents the resolver contract
+  (returns SVG strings, errors by throwing/rejecting, monochrome sources
+  normalise foreground to `currentColor`, may be async).
+  - `#` is registered by default; `prefixes` (plain object **or `Map`**) adds
+    or replaces handlers, `null` removes one (e.g. `{ "#": null }`).
+    **Longest prefix wins** (`@@` beats `@`). Handler gets the remainder
+    verbatim (`@home?fill=1` -> `home?fill=1`); `fallback` (no prefix
+    matched) gets the whole `src`; neither -> rejects
+    `no SVG resolver for '<src>'`.
+  - Validation: non-string/empty `src` rejects `TypeError`; a handler result
+    that isn't a string rejects `TypeError` (`did not return an SVG string`);
+    non-function handlers/fallback or empty prefix throw at creation. Sync
+    throws in handlers surface as rejections (function is `async`).
+  - Material job plugs in as `createSvgResolver({ prefixes: { "@":
+    createMaterialResolver(opts) } })` - handler signature `(rest) =>
+    Promise<string>`; nothing else needed in resolve.js.
+- `src/node/fileResolver.js` exports **`createFileResolver({ baseDir } =
+  {})`** -> `async (path) => string` via `fs.promises.readFile(path.resolve(
+  baseDir ?? "", path), "utf8")`, strips a leading UTF-8 BOM, otherwise
+  unchanged; missing file rejects with the fs error (`ENOENT`). Step 13's Node
+  entry should pass it as `fallback`.
+- `test/resolve.test.js`: 23 tests (incl. a static check that
+  `src/resolve.js` has no `node:`/fs/path/@napi-rs imports; fixture
+  `test/fixtures/material-home.svg` used for the file resolver; BOM case via a
+  temp dir). `npm test`: 490 tests, 490 pass.
+
 ### CLAUDE.md
 - *Building and testing* section has been added by the user: no build step;
   `npm test` must pass with 0 failures. (Earlier Rule 4 gap - resolved.)
@@ -869,6 +900,20 @@ folded into Plan steps 3, 5, 6, 9, 11 and the related-jobs note above:
   test files may import `@napi-rs/canvas` directly - the "only importer"
   rule applies to `src/`.
 
+### Implement step 9 - for user review
+- Non-prefixed references go to an explicit `fallback` option (rather than a
+  special `""` prefix); the Node entry will use the file resolver as fallback.
+- Longest-prefix matching, `Map` support and `null`-to-remove (incl. removing
+  the built-in `#`) were added beyond the plan - small and tested.
+- Handlers receive only the remainder (not the full `src`); the fallback
+  gets the full `src`.
+- `resolve.js` imports `src/icons.js` statically (~70 KB), not lazily.
+- The file resolver strips a UTF-8 BOM; relative paths resolve against
+  `baseDir` (default cwd). No caching, no path restrictions (callers trust
+  their definitions).
+- Resolved SVGs are returned uncached; caching is the material resolver's
+  job (per its plan).
+
 ## Plan
 Each step: write/adjust tests first (TDD), implement, run `npm test` (0
 failures), tick the box, record learnings in *Notes*. Steps marked **[user]**
@@ -998,7 +1043,7 @@ ask the user to review.
   @napi-rs/canvas directly) - note the quirk test must still draw via raw
   Skia, so keep a raw path for it or move it into `test/backend.test.js`.
   Re-run `test/icons.test.js` (librsvg-reference check) through the backend.
-- [ ] 9. **SVG resolver (`src/resolve.js`).** Tests first
+- [x] 9. **SVG resolver (`src/resolve.js`).** Tests first
   (`test/resolve.test.js`): `createSvgResolver({ prefixes })` returns async
   `resolve(src)`; built-in `#name` -> `icons[name]`, unknown name throws;
   custom prefix handler is called with the remainder; a single-char non-`#`
